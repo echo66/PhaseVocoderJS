@@ -263,6 +263,34 @@ function FourierTransform(bufferSize, sampleRate) {
     return this.bandwidth * index + this.bandwidth / 2;
   };
 
+  this.calculateSpectrumAndPhase = function() {
+    var spectrum  = this.spectrum,
+        angle     = this.angle,
+        real      = this.real,
+        imag      = this.imag,
+        bSi       = 2 / this.bufferSize,
+        sqrt      = Math.sqrt,
+        atan2     = Math.atan2,
+        rval, 
+        ival,
+        mag;
+
+    for (var i = 0, N = bufferSize/2; i < N; i++) {
+      rval = real[i];
+      ival = imag[i];
+      mag = bSi * sqrt(rval * rval + ival * ival);
+      pha = atan2(ival, rval);
+
+      if (mag > this.peak) {
+        this.peakBand = i;
+        this.peak = mag;
+      }
+
+      spectrum[i] = mag;
+      angle[i] = pha;
+    }
+  }
+
   this.calculateSpectrum = function() {
     var spectrum  = this.spectrum,
         real      = this.real,
@@ -349,7 +377,7 @@ DFT.prototype.forward = function(buffer) {
     imag[k] = ival;
   }
 
-  return this.calculateSpectrum();
+  //return this.calculateSpectrum();
 };
 
 
@@ -539,6 +567,27 @@ FFT.prototype.inverse = function(real, imag) {
 
   return buffer;
 };
+
+FFT.prototype.fftshift = function(buffer) {
+  if (buffer.length % 2 == 0) {
+    for (var i = 0; i < buffer.length / 2; i++) {
+      var tmp = buffer[i];
+      buffer[i] = buffer[i + buffer.length / 2];
+      buffer[i + buffer.length / 2] = tmp;
+    }
+  } else {
+    var shiftAmt = buffer.length / 2;
+    var remaining = buffer.length;
+    var curr = 0;
+    while (remaining >= 0) {
+      var next = buffer[(curr + shiftAmt) % buffer.length];
+      buffer[(curr+shiftAmt) % buffer.length] = save;
+      save = next;
+      curr = (curr + shiftAmt) % buffer.length;
+      remaining--;
+    }
+  }
+}
 
 /**
  * RFFT is a class for calculating the Discrete Fourier Transform of a signal
@@ -1425,6 +1474,11 @@ function WindowFunction(type, alpha) {
     case DSP.TRIANGULAR:
       this.func = WindowFunction.Triangular;
       break;
+
+    case DSP.SINBETA:
+      this.func = WindowFunction.SinBeta;
+      this.alpha = this.alpha || 1.0;
+      break
   }
 }
 
@@ -1480,6 +1534,10 @@ WindowFunction.Rectangular = function(length, index) {
 WindowFunction.Triangular = function(length, index) {
   return 2 / length * (length / 2 - Math.abs(index - (length - 1) / 2));
 };
+
+WindowFunction.SinBeta = function(length, index, beta) {
+  return Math.pow(Math.sin(Math.PI*index/length), beta);
+}
 
 function sinh (arg) {
   // Returns the hyperbolic sine of the number, defined as (exp(number) - exp(-number))/2 
