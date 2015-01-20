@@ -6,10 +6,25 @@
 	    <meta name="viewport" content="width=device-width, initial-scale=1">
 	</head>
 	<body>
-		<script src="mathjs/dist/math.min.js" ></script>
+		<script>
+			var out = [];
+			var request = new XMLHttpRequest();
+			var isAsynchronous = true;
+			//var url = 'data/Time_Frames_To_STFT_Frames.json';
+			var url = 'data/STFT_Frames_To_STFT_Processed_Frames.json';
+			request.open('GET', url, isAsynchronous);
+			request.onload = function(xmlEvent){
+				out = JSON.parse(request.response);
+			};
+			request.send();
+		</script>
+		<!--<script src="mathjs/dist/math.min.js" ></script>-->
 		<script src="dspjs/dsp.js" ></script>
-		<script src="PV.js" ></script>
-		<script src="test.js" ></script>
-		<!--<script src="blah.js" ></script>-->
+		<!--<script src="PV.js" ></script>-->
+		<script src="blah.js" ></script>
+		<!--<script src="test1.js" ></script>-->
+		<!--<script src="test2.js" ></script>-->
+		<script src="testPhaseCorrectionFunction.js" ></script>
+		<script src="testSTFTFunction.js" ></script>
 	</body>
 </html>
