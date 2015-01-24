@@ -42,6 +42,7 @@ var DSP = {
   LANCZOS:        8,
   RECTANGULAR:    9,
   TRIANGULAR:     10,
+  SINBETA:        11,
 
   // Loop modes
   OFF:            0,
@@ -244,8 +245,8 @@ function FourierTransform(bufferSize, sampleRate) {
   this.sampleRate = sampleRate;
   this.bandwidth  = 2 / bufferSize * sampleRate / 2;
 
-  this.spectrum   = new Float32Array(bufferSize/2);
-  this.angle      = new Float32Array(bufferSize/2);
+  this.spectrum   = new Float32Array(bufferSize);
+  this.angle      = new Float32Array(bufferSize);
   this.real       = new Float32Array(bufferSize);
   this.imag       = new Float32Array(bufferSize);
 
@@ -263,34 +264,6 @@ function FourierTransform(bufferSize, sampleRate) {
     return this.bandwidth * index + this.bandwidth / 2;
   };
 
-  this.calculateSpectrumAndPhase = function() {
-    var spectrum  = this.spectrum,
-        angle     = this.angle,
-        real      = this.real,
-        imag      = this.imag,
-        bSi       = 2 / this.bufferSize,
-        sqrt      = Math.sqrt,
-        atan2     = Math.atan2,
-        rval, 
-        ival,
-        mag;
-
-    for (var i = 0, N = bufferSize/2; i < N; i++) {
-      rval = real[i];
-      ival = imag[i];
-      mag = bSi * sqrt(rval * rval + ival * ival);
-      pha = atan2(ival, rval);
-
-      if (mag > this.peak) {
-        this.peakBand = i;
-        this.peak = mag;
-      }
-
-      spectrum[i] = mag;
-      angle[i] = pha;
-    }
-  }
-
   this.calculateSpectrum = function() {
     var spectrum  = this.spectrum,
         real      = this.real,
@@ -301,14 +274,21 @@ function FourierTransform(bufferSize, sampleRate) {
         ival,
         mag;
 
-    for (var i = 0, N = bufferSize/2; i < N; i++) {
+    for (var i = 0, N = bufferSize/2; i <= N; i++) {
       rval = real[i];
       ival = imag[i];
-      mag = bSi * sqrt(rval * rval + ival * ival);
+      // mag = bSi * sqrt(rval * rval + ival * ival);
+      mag = sqrt(rval * rval + ival * ival);
 
       if (mag > this.peak) {
         this.peakBand = i;
         this.peak = mag;
+      }
+
+      if (i>0) {
+        rval = real[bufferSize-i];
+        ival = imag[bufferSize-i];
+        spectrum[bufferSize-i] = sqrt(rval * rval + ival * ival);
       }
 
       spectrum[i] = mag;
@@ -321,8 +301,12 @@ function FourierTransform(bufferSize, sampleRate) {
         imag      = this.imag,
         atan2     = Math.atan2;
 
-    for (var i = 0, N = bufferSize/2; i < N; i++) {
+    for (var i = 0, N = bufferSize/2; i <= N; i++) {
       angle[i] = atan2(imag[i], real[i]);
+
+      if (i>0) {
+        angle[bufferSize-i] = atan2(imag[bufferSize-i], real[bufferSize-i]);
+      }
     }
   };
 }
@@ -377,7 +361,7 @@ DFT.prototype.forward = function(buffer) {
     imag[k] = ival;
   }
 
-  //return this.calculateSpectrum();
+  return this.calculateSpectrum();
 };
 
 
@@ -567,27 +551,6 @@ FFT.prototype.inverse = function(real, imag) {
 
   return buffer;
 };
-
-FFT.prototype.fftshift = function(buffer) {
-  if (buffer.length % 2 == 0) {
-    for (var i = 0; i < buffer.length / 2; i++) {
-      var tmp = buffer[i];
-      buffer[i] = buffer[i + buffer.length / 2];
-      buffer[i + buffer.length / 2] = tmp;
-    }
-  } else {
-    var shiftAmt = buffer.length / 2;
-    var remaining = buffer.length;
-    var curr = 0;
-    while (remaining >= 0) {
-      var next = buffer[(curr + shiftAmt) % buffer.length];
-      buffer[(curr+shiftAmt) % buffer.length] = save;
-      save = next;
-      curr = (curr + shiftAmt) % buffer.length;
-      remaining--;
-    }
-  }
-}
 
 /**
  * RFFT is a class for calculating the Discrete Fourier Transform of a signal

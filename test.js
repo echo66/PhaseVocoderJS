@@ -6,7 +6,7 @@ var buffer = context.createBuffer(2, BUFFER_SIZE, context.sampleRate);
 
 var node = context.createScriptProcessor(BUFFER_SIZE, 2, 2);
 
-var alpha = 0.9;
+var alpha = 1;
 
 var phasevocoderL = new PhaseVocoder(BUFFER_SIZE, 44100, alpha);
 var phasevocoderR = new PhaseVocoder(BUFFER_SIZE, 44100, alpha);

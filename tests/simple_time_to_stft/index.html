@@ -1,0 +1,33 @@
+<!DOCTYPE html>    
+<html lang="en">
+    <head>
+	    <meta charset="utf-8">
+	    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+	    <meta name="viewport" content="width=device-width, initial-scale=1">
+	</head>
+	<body>
+		<script>
+			var data1 = [];
+
+			var request1 = new XMLHttpRequest();
+
+			var isAsynchronous = true;
+
+			var url1 = '../../data/song2/simple_time_to_stft.json';
+
+			request1.open('GET', url1, isAsynchronous);
+			request1.onload = function(xmlEvent){
+				data1 = JSON.parse(request1.response);
+			};
+			request1.send();
+
+		</script>
+
+		<script type="text/javascript" src="http://localhost/jsfft/lib/complex_array.js" ></script>
+		<script type="text/javascript" src="http://localhost/jsfft/lib/fft.js" ></script>
+		<script type="text/javascript" src="../../dspjs/dsp.js" ></script>
+		<script type="text/javascript" src="../../fft.js" ></script>
+		<script type="text/javascript" src="../test_helpers.js" ></script>
+		<script type="text/javascript" src="simple_time_to_stft_test_functions.js"></script>
+	</body>
+</html>

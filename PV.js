@@ -1,5 +1,7 @@
 function PhaseVocoder(winSize, sampleRate, alpha) {
 
+	var _position = 0;
+
 	var _fftProcessor = new FFT(winSize, sampleRate);
 
 	var _RS = winSize/4;
@@ -10,24 +12,27 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 
 	var _previousInputPhase = createConstantArray(winSize/2, 0);
 	var _previousOutputPhase = createConstantArray(winSize/2, 0);
-	var _framingWindow = createSinBetaWindowArray(winSize, 1);
-	var _squaredFramingWindow = _framingWindow.map(function(x,i){ return x*x; });
+	//var _framingWindow = createSinBetaWindowArray(winSize, 1);
+	//var _squaredFramingWindow = _framingWindow.map(function(x,i){ return x*x; });
+	var _framingWindow = new WindowFunction(DSP.SINBETA);
+	var _squaredFramingWindow = _framingWindow.process(createConstantArray(winSize, 1)).map(function(x,i){ return x*x; });
 	var _winSize = winSize;
 
-	var _overlapBuffers = []; 
-	_overlapBuffers[0] = []; // current frame
-	_overlapBuffers[1] = createConstantArray(3*winSize/4, 0);; // -1 previous frame 
-	_overlapBuffers[2] = createConstantArray(winSize/2, 0);; // -2 previous frame 
-	_overlapBuffers[3] = createConstantArray(winSize/4, 0); // -3 previous frame 
+	// var _overlapBuffers = []; 
+	// _overlapBuffers[0] = []; // current frame
+	// _overlapBuffers[1] = createConstantArray(3*winSize/4, 0);; // -1 previous frame 
+	// _overlapBuffers[2] = createConstantArray(winSize/2, 0);; // -2 previous frame 
+	// _overlapBuffers[3] = createConstantArray(winSize/4, 0); // -3 previous frame 
 
 	// RUN THIS FOR THE JAVA-PORT OVERLAPPING METHOD
-	//_overlapBuffers = createConstantArray(winSize, 0);
+	var _overlapBuffers = createConstantArray(winSize, 0);
 
+	var _owOverlapBuffers = [];
+	// _overlapBuffers[0] = []; // current frame
+	// _overlapBuffers[1] = createConstantArray(3*winSize/4, 0);; // -1 previous frame 
+	// _overlapBuffers[2] = createConstantArray(winSize/2, 0);; // -2 previous frame 
+	// _overlapBuffers[3] = createConstantArray(winSize/4, 0); // -3 previous frame 
 	var _owOverlapBuffers = createConstantArray(winSize, 0);
-	_overlapBuffers[0] = []; // current frame
-	_overlapBuffers[1] = createConstantArray(3*winSize/4, 0);; // -1 previous frame 
-	_overlapBuffers[2] = createConstantArray(winSize/2, 0);; // -2 previous frame 
-	_overlapBuffers[3] = createConstantArray(winSize/4, 0); // -3 previous frame 
 
 	var _first = true;
 
@@ -39,7 +44,7 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 
 
 	/*
-	 *  TODO
+	 *  Overlap procedure for 75% synthesis overlap.
 	 *
 	 *  @param buffers: TODO
 	 *
@@ -278,6 +283,44 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 		return ipa_hop;
 	}
 
+	function get_phase_advances_v2(currentInputPhase, previousInputPhase, omega, RA, RS) {
+
+		var ipa_hop = new Array(omega.length);
+
+		for (var i=0; i<omega.length; i++) {
+			var twoPI = 2 * Math.PI;
+
+			var dphi = omega[i] * RA;
+
+			var auxHpi = (currentInputPhase[i] - previousInputPhase[i]) - dphi;
+			var hpi = auxHpi - twoPI * Math.round(auxHpi/twoPI);
+
+			var ipa_sample = omega[i] + hpi / RA;
+
+			ipa_hop[i] = ipa_sample * RS;
+		}
+
+		return ipa_hop;
+	}
+
+	function get_phase_advances_v3(currentInputPhase, previousInputPhase, omega, RA, RS) {
+		var twoPI = 2 * Math.PI;
+
+		var ipa_hop = omega.map(function(omegaI, i){
+			var dphi = omegaI * RA;
+
+			var auxHpi = (currentInputPhase[i] - previousInputPhase[i]) - dphi;
+			var hpi = auxHpi - twoPI * Math.round(auxHpi/twoPI);
+
+			var ipa_sample = omegaI + hpi / RA;
+
+			return ipa_sample * RS;
+
+		});
+
+		return ipa_hop;
+	}
+
 
 	/*
 	 *  TODO
@@ -327,8 +370,8 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *  @returns Float32Array array with the phasor angles.
 	 */
 	function identity_phase_locking(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
-		//var r = findPeaks(currentInputMagnitude);
-		var r = findPeaksV2(currentInputMagnitude,6);
+		var r = findPeaks(currentInputMagnitude);
+		//var r = findPeaksV2(currentInputMagnitude,10);
 
 		var influenceRegions = r.inflRegionStart.map(function(inflRegStart,i){ return Math.max(0, r.inflRegionEnd[i] - inflRegStart + 1); });
 
@@ -383,7 +426,7 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 
 		var currentInputPhase = fftObject.angle;
 
-		var instPhaseAdv = get_phase_advances(currentInputPhase, previousInputPhase, omega, RA, RS);
+		var instPhaseAdv = get_phase_advances_v2(currentInputPhase, previousInputPhase, omega, RA, RS);
 
 		var currentInputMag = fftObject.spectrum;
 
@@ -415,60 +458,139 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	}
 
 
+	function generateY(theta, complexFrame) {
+		// phasor = e^(j*theta) = cos(theta) + j*sin(theta)
+		// X = x_real + j*x_imag
+		// Y = phasor .* X =
+		//   = [cos(theta) + j*sin(theta)] * [x_real + j*x_imag] =
+		//	 = [cos(theta) * x_real - sin(theta) * x_imag] + j*[cos(theta) * x_imag + sin(theta) * x_real]
+		//   = Y_real + j*Y_imag
+
+		var Y_real  = new Float32Array(theta.length);
+		var Y_imag  = new Float32Array(theta.length);
+		var Y_phase = new Float32Array(theta.length);
+		var Y_mag   = new Float32Array(theta.length);
+		for (var i=0; i<theta.length; i++) {
+			var phasor_theta_real = Math.cos(theta[i]);
+			var phasor_theta_imag = Math.sin(theta[i]);
+			var X_real  = complexFrame.real[i];
+			var X_imag  = complexFrame.imag[i];
+
+			Y_real[i]  = phasor_theta_real * X_real - phasor_theta_imag * X_imag;
+			Y_imag[i]  = phasor_theta_real * X_imag + phasor_theta_imag * X_real;
+			Y_phase[i] = Math.atan2(Y_real, Y_imag);
+			Y_mag[i]   = Math.sqrt(Y_real * Y_real + Y_imag * Y_imag);
+		}
+
+		return {real: Y_real, imag: Y_imag, mag: Y_mag, angle: Y_phase};
+
+	}
+
+
 	this.process = function(inputFrame) {
 
-		var _inputFrame = inputFrame.map(function(sample,i){
-			return sample * _framingWindow[i];
-		});
+		_inputFrame = _framingWindow.process(inputFrame);
+		//_inputFrame = _framingWindow.process(this.extract(_position, _RA, _winSize));
+		_position += _RA;
+
+		fftShift(_inputFrame);
 
 		var outputFrame = [];
 
 		_fftProcessor.forward(_inputFrame);
-		_fftProcessor.calculateAngle();
+		_fftProcessor.calculateSpectrumAndPhase(Math.round(_winSize)+1);
 
 		var processedFrame = [];
 
-		if (_first) {
+		var out = (_first)? null : pv_step_v2(_fftProcessor, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
+		_previousOutputPhase = (_first)? _fftProcessor.angle : out.phase;
+		_previousInputPhase = _fftProcessor.angle;
+		processedFrame = (_first)? _fftProcessor.inverse() : _fftProcessor.inverse(out.real, out.imag);
+		_first = false;
 
-			_previousOutputPhase = _fftProcessor.angle;
-			_previousInputPhase = _fftProcessor.angle;
+		processedFrame = _framingWindow.process(processedFrame);
 
-			processedFrame = _fftProcessor.inverse();
-
-			_first = !_first;
-
-		} else {
-
-			var out = pv_step_v2(_fftProcessor, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
-
-			_previousOutputPhase = out.phase;
-			_previousInputPhase = _fftProcessor.angle;
-
-			processedFrame = _fftProcessor.inverse(out.real, out.imag);
-
-		}
-
-		processedFrame = Array.prototype.slice.call(processedFrame).map(function(sample,i){
-			return sample * _framingWindow[i];
-		});
+		fftShift(processedFrame);
 
 		outputFrame = overlapAndSlide(_RS, processedFrame, _overlapBuffers, _winSize);
 
 		owFrame = overlapAndSlide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
 
-		// outputFrame = processOverlapBuffers(_RS, processedFrame, _overlapBuffers);
-
-		// owFrame = processOverlapBuffers(_RS, _squaredFramingWindow, _owOverlapBuffers);
-
-		outputFrame.map(function(sample, i){
-			return sample / (owFrame[i]<10e-3)?1:owFrame[i];
+		outputFrame = outputFrame.map(function(sample, i){
+			return sample / ((owFrame[i]<10e-3)? 10e-3 : owFrame[i]);
 		});
 
 		return outputFrame;
 
 	}
 
+	this.processAll = function(data) {
+		var Y = [];
+		var OW = [];
+		var win = _framingWindow.process(createConstantArray(winSize, 1));
+		var numFrames = Math.floor((data.length - _winSize)/_RA + 1);
+
+		for (var i=0, anaPos=0, synPos=0; i<numFrames; i++, anaPos+=_RA, synPos+=_RS) {
+			console.log('Frame ' + (i+1) + '/' + numFrames);
+			// Analysis Step
+			var frame = _framingWindow.process(data.subarray(anaPos,anaPos+_winSize));
+			_fftProcessor.forward(frame);
+			_fftProcessor.calculateSpectrumAndPhase();
+			// -------------
+
+			// Phase Correction Step
+			var out = (_first)? null : pv_step_v2(_fftProcessor, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
+			_previousOutputPhase = (_first)? _fftProcessor.angle : out.phase;
+			_previousInputPhase = _fftProcessor.angle;
+			processedFrame = (_first)? _fftProcessor.inverse() : _fftProcessor.inverse(out.real, out.imag);
+			processedFrame = _framingWindow.process(processedFrame);
+			// ---------------------
+
+			// Overlapping  Step
+			processedFrame = Array.prototype.slice.call(processedFrame);
+			if (_first) {
+				Y = Y.concat(processedFrame);
+				OW = OW.concat(win);
+			} else {
+				var overlappedFrames = new Array(processedFrame.length);
+				var overlappedWindows = new Array(processedFrame.length);
+				for (var j=0; j<processedFrame.length; j++) {
+					overlappedWindows[j] = win[j] + ((OW[synPos+j])? OW[synPos+j] : 0);
+					overlappedFrames[j] = (processedFrame[j] + ((Y[synPos+j])? Y[synPos+j] : 0)) / overlappedWindows[j];
+				}
+				Y.splice(synPos);
+				Y = Y.concat(overlappedFrames);
+				OW.splice(synPos);
+				OW = OW.concat(overlappedWindows);
+			}
+			// -----------------
+
+			_first = false;
+
+		}
+
+		return Y;
+	}
+
 	this.reset = function() {
-		// TODO
+
+		_previousInputPhase = createConstantArray(winSize/2, 0);
+		_previousOutputPhase = createConstantArray(winSize/2, 0);
+
+		_overlapBuffers = createConstantArray(winSize, 0);
+		_owOverlapBuffers = createConstantArray(winSize, 0);
+
+		_first = true;
+	}
+
+	this.setAlpha = function(newAlpha) {
+		this.reset();
+		_RA = _winSize/4;
+		_RS = Math.round(newAlpha * _RA);
+	}
+
+	this.setPosition = function(newPosition) {
+		this.reset();
+		_position = newPosition;
 	}
 }
