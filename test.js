@@ -8,8 +8,8 @@ var node = context.createScriptProcessor(BUFFER_SIZE, 2, 2);
 
 var alpha = 1;
 
-var phasevocoderL = new PhaseVocoder(BUFFER_SIZE, 44100, alpha);
-var phasevocoderR = new PhaseVocoder(BUFFER_SIZE, 44100, alpha);
+var phasevocoderL = new PhaseVocoder(BUFFER_SIZE, 44100); phasevocoderL.setAlpha(0.9);
+var phasevocoderR = new PhaseVocoder(BUFFER_SIZE, 44100); phasevocoderR.setAlpha(0.9);
 
 loadSample = function(url) {
     var request = new XMLHttpRequest();
@@ -20,8 +20,7 @@ loadSample = function(url) {
         console.log('url loaded');
         context.decodeAudioData(request.response, function(decodedData) {
             buffer = decodedData
-        })
-        // createBuffer(request.response);
+        });
     }
 
     console.log('reading url');

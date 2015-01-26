@@ -110,6 +110,35 @@
 		return {peaks: peaks, inflRegionStart: inflRegStart, inflRegionEnd: inflRegEnd};
 	}
 
+	function findPeaksV3(magFrame) {
+		var magSpecPad = [0,0].concat(magFrame).concat([0,0]);
+
+		var peaks = magSpecPad.slice(2,magSpecPad.length-2).map(function(x,i){
+			var I = i + 2;
+			if(x > magSpecPad[I-2] && x > magSpecPad[I-1] && x > magSpecPad[I+1] && x > magSpecPad[I+2]) {
+				return i;
+			}
+		}).filter(function(x){ 
+			return x!=undefined && x!=null; 
+		});
+
+		// var inflRegStart = []; var inflRegEnd = [];
+		var inflRegStart = new Array(peaks.length); 
+		var inflRegEnd = new Array(peaks.length);
+
+		inflRegStart[0] = 0;
+		for (var i=0; i<peaks.length-1; i++) {
+			inflRegStart[i+1] = Math.ceil((peaks[i] + peaks[i+1])/2); 
+		}
+
+		for (var i=1; i<inflRegStart.length; i++) {
+			inflRegEnd[i-1] = inflRegStart[i]-1;
+		}
+		inflRegEnd[inflRegEnd.length] = inflRegEnd.length-1;
+
+		return {peaks: peaks, inflRegionStart: inflRegStart, inflRegionEnd: inflRegEnd};
+	}
+
 
 	/*
 	 *  Returns the instantaneous phase advances per synthesis hopsize.
@@ -189,6 +218,24 @@
 		return ipa_hop;
 	}
 
+	function get_phase_advances_v4(currentInputPhase, previousInputPhase, omega, RA, RS) {
+		var twoPI = 2 * Math.PI;
+		var ipa_hop = new Array(omega.length);
+
+		for (var i=0; i<omega.length; i++) {
+			var dphi = omega[i] * RA;
+
+			var auxHpi = (currentInputPhase[i] - previousInputPhase[i]) - dphi;
+			var hpi = auxHpi - twoPI * Math.round(auxHpi/twoPI);
+
+			var ipa_sample = omega[i] + hpi / RA;
+
+			ipa_hop[i] = ipa_sample * RS;
+		}
+
+		return ipa_hop;
+	}
+
 
 	/*
 	 *  TODO
@@ -221,6 +268,27 @@
 		return theta;
 	}
 
+	function get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, frequencyBins, influenceRegions) {
+		// Get the peaks in the spectrum together with their regions of influence.
+
+		//var theta = new Float32Array(currentInputPhase.length);
+		var theta = new Array(currentInputPhase.length);
+
+		var theta_idx = 0;
+		for (var i=0; i<frequencyBins.length; i++) {
+			var bin = frequencyBins[i];
+			for (var j=0; j<influenceRegions[i]; j++, theta_idx++) {
+				theta[theta_idx] = previousOutputPhase[bin] + instPhaseAdv[bin] - currentInputPhase[bin];
+			}
+		}
+
+		var remaining_length = theta.length - theta_idx;
+		for (var i=0; i<remaining_length; i++, theta_idx++)
+			theta[theta_idx] = 0;
+
+		return theta;
+	}
+
 
 	/*
 	 *  Compute a phasor that rotates the phase angles of the current
@@ -238,12 +306,26 @@
 	 *  @returns Float32Array array with the phasor angles.
 	 */
 	function identity_phase_locking(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
-		var r = findPeaks(currentInputMagnitude);
-		//var r = findPeaksV2(currentInputMagnitude,10);
+		// var r = findPeaks(currentInputMagnitude);
+		// var r = findPeaksV2(currentInputMagnitude,10);
+		var r = findPeaksV3(currentInputMagnitude);
 
 		var influenceRegions = r.inflRegionStart.map(function(inflRegStart,i){ return Math.max(0, r.inflRegionEnd[i] - inflRegStart + 1); });
 
-		var phasor_theta = get_phasor_theta(currentInputPhase, previousOutputPhase, instPhaseAdv, r.peaks, influenceRegions);
+		var phasor_theta = get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, r.peaks, influenceRegions);
+
+		return phasor_theta;
+	}
+
+	function identity_phase_locking_v2(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
+		var r = findPeaks(currentInputMagnitude);
+
+		var influenceRegions = new Array(r.inflRegionStart.length);
+
+		for (var i=0; i<influenceRegions.length; i++) 
+			influenceRegions[i] = Math.max(0, r.inflRegionEnd[i] - r.inflRegionStart[i] + 1);
+
+		var phasor_theta = get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, r.peaks, influenceRegions);
 
 		return phasor_theta;
 	}
@@ -294,11 +376,11 @@
 
 		var currentInputPhase = fftObject.angle;
 
-		var instPhaseAdv = get_phase_advances_v2(currentInputPhase, previousInputPhase, omega, RA, RS);
+		var instPhaseAdv = get_phase_advances_v4(currentInputPhase, previousInputPhase, omega, RA, RS);
 
 		var currentInputMag = fftObject.spectrum;
 
-		var phasor_theta = identity_phase_locking(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
+		var phasor_theta = identity_phase_locking_v2(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
 		//var phasor_theta = no_phase_locking(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
 
 		// return generateY(phasor_theta, fftObject, 1025);

@@ -9,14 +9,14 @@ var fft_frame_imag = [0, -0.266167816192769, 1.80639695159739, 5.50529606255147,
 
 
 
-var inputFFT = new Float32Array(4096);
+var inputFFT = new Array(4096);
 
 for (var i=0; i<2048; i++) {
 	inputFFT[2*i] = fft_frame_real[i];
 	inputFFT[2*i+1] = fft_frame_imag[i];
 }
 
-var output = new Float32Array(4096);
+var output = new Array(4096);
 
 var ifft = new FFT.complex(2048, true);
 
@@ -24,7 +24,7 @@ ifft.simple(output, inputFFT);
 
 
 
-var output2 = new Float32Array(2048);
+var output2 = new Array(2048);
 
 for (var i=0; i<2048; i++) {
 	output2[i] = output[2*i] / 2048;
@@ -32,14 +32,14 @@ for (var i=0; i<2048; i++) {
 
 
 
-var inputTime = new Float32Array(2048);
+var inputTime = new Array(2048);
 
 for (var i=0; i<2048; i++) {
 	inputTime[i] = time_frame[i];
 }
 
-var output3 = new Float32Array(4096);
+var output3 = new Array(4096);
 
 var fft = new FFT.complex(2048, false);
 
-fft.simple(output3, inputTime);
+fft.simple(output3, inputTime, 'real');
