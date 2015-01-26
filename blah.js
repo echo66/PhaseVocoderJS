@@ -301,30 +301,40 @@
 		var phasor_theta = identity_phase_locking(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
 		//var phasor_theta = no_phase_locking(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
 
+		// return generateY(phasor_theta, fftObject, 1025);
+
 		// Multiplication of two vectors of complex numbers
 		// var out_real = new Float32Array((phasor_theta.length-1)*2);
 		// var out_imag = new Float32Array((phasor_theta.length-1)*2);
 		// var out_phase = new Float32Array((phasor_theta.length-1)*2);
 		// var out_magnitude = new Float32Array((phasor_theta.length-1)*2);
+
 		var out_real = new Array((phasor_theta.length-1)*2);
 		var out_imag = new Array((phasor_theta.length-1)*2);
 		var out_phase = new Array((phasor_theta.length-1)*2);
 		var out_magnitude = new Array((phasor_theta.length-1)*2);
 		var doubleSize = (phasor_theta.length-1)*2;
+		var sqrt	= Math.sqrt;
+		var cos		= Math.cos;
+		var sin		= Math.sin;
+		var atan2	= Math.atan2;
 
+		
 		for (var i=0; i<phasor_theta.length; i++) {
 			var theta = phasor_theta[i];
 
-			var phasor_theta_real = Math.cos(theta);
-			var phasor_theta_imag = Math.sin(theta);
+			var phasor_theta_real = cos(theta);
+			var phasor_theta_imag = sin(theta);
 			out_real[i] = phasor_theta_real * fftObject.real[i] - phasor_theta_imag * fftObject.imag[i];
 			out_imag[i] = phasor_theta_real * fftObject.imag[i] + phasor_theta_imag * fftObject.real[i];
+			out_phase[i] = atan2(out_imag[i], out_real[i]);
+			out_magnitude[i] = sqrt(out_imag[i]*out_imag[i] + out_real[i]*out_real[i]);
 
 			if (i>0) {
 				out_real[doubleSize-i] = out_real[i];
 				out_imag[doubleSize-i] = -out_imag[i];
-				out_phase[doubleSize-i] = Math.atan2(out_imag[doubleSize-i], out_real[doubleSize-i]);
-				out_magnitude[doubleSize-i] = Math.sqrt(out_imag[doubleSize-i]*out_imag[doubleSize-i] + out_real[doubleSize-i]*out_real[doubleSize-i]);
+				out_phase[doubleSize-i] = atan2(out_imag[doubleSize-i], out_real[doubleSize-i]);
+				out_magnitude[doubleSize-i] = sqrt(out_imag[doubleSize-i]*out_imag[doubleSize-i] + out_real[doubleSize-i]*out_real[doubleSize-i]);
 			}
 
 
@@ -332,16 +342,14 @@
 			// out[2046] = out[2]
 			// ...
 			// out[1026] = out[1024]
-
-			out_phase[i] = Math.atan2(out_imag[i], out_real[i]);
-			out_magnitude[i] = Math.sqrt(out_imag[i]*out_imag[i] + out_real[i]*out_real[i]);
 		}
 		
 		return {real: out_real, imag: out_imag, phase: out_phase, magnitude: out_magnitude};
 	}
 
-
-	function generateY(theta, complexFrame) {
+	// For some (divine) reason, the forloop inside this function is A LOT slower than the one
+	// in pv_step_v2. Go figure...
+	function generateY(theta, complexFrame, length) {
 		// phasor = e^(j*theta) = cos(theta) + j*sin(theta)
 		// X = x_real + j*x_imag
 		// Y = phasor .* X =
@@ -357,17 +365,30 @@
 		var Y_imag  = new Array(theta.length);
 		var Y_phase = new Array(theta.length);
 		var Y_mag   = new Array(theta.length);
+		var sqrt	= Math.sqrt;
+		var cos		= Math.cos;
+		var sin		= Math.sin;
+		var atan2	= Math.atan2;
+
+		var dLen = (length-1)*2;
 
 		for (var i=0; i<theta.length; i++) {
-			var phasor_theta_real = Math.cos(theta[i]);
-			var phasor_theta_imag = Math.sin(theta[i]);
+			var phasor_theta_real = cos(theta[i]);
+			var phasor_theta_imag = sin(theta[i]);
 			var X_real  = complexFrame.real[i];
 			var X_imag  = complexFrame.imag[i];
 
 			Y_real[i]  = phasor_theta_real * X_real - phasor_theta_imag * X_imag;
 			Y_imag[i]  = phasor_theta_real * X_imag + phasor_theta_imag * X_real;
-			Y_phase[i] = Math.atan2(Y_real, Y_imag);
-			Y_mag[i]   = Math.sqrt(Y_real * Y_real + Y_imag * Y_imag);
+			Y_phase[i] = atan2(Y_real, Y_imag);
+			Y_mag[i]   = sqrt(Y_real * Y_real + Y_imag * Y_imag);
+
+			if (i>0) {
+				Y_real[dLen-i] = Y_real[i];
+				Y_imag[dLen-i] = -Y_imag[i];
+				Y_phase[dLen-i] = atan2(Y_imag[dLen-i], Y_real[dLen-i]);
+				Y_mag[dLen-i] = sqrt(Y_imag[dLen-i]*Y_imag[dLen-i] + Y_real[dLen-i]*Y_real[dLen-i]);
+			}
 		}
 
 		return {real: Y_real, imag: Y_imag, magnitude: Y_mag, phase: Y_phase};
