@@ -1,25 +1,52 @@
-function PhaseVocoder(winSize, sampleRate, alpha) {
+function PhaseVocoder(winSize, sampleRate) {
 
 	var _position = 0;
-
-	var _fftProcessor = new FFT(winSize, sampleRate);
+	var _sampleRate = sampleRate;
 
 	var _RS = 0;
 	var _RA = 0;
-	var _omega = createOmegaArray(winSize);
+	var _omega;
 
-	var _previousInputPhase = createConstantArray(winSize/2, 0);
-	var _previousOutputPhase = createConstantArray(winSize/2, 0);
-	var _framingWindow = createSinBetaWindowArray(winSize, 1);
-	var _squaredFramingWindow = _framingWindow.map(function(x,i){ return x*x; });
+	var _previousInputPhase;
+	var _previousOutputPhase;
+	var _framingWindow;
+	var _squaredFramingWindow;
 	
 	var _winSize = winSize;
 
-	var _overlapBuffers = createConstantArray(winSize, 0);
+	var _overlapBuffers;
 
-	var _owOverlapBuffers = createConstantArray(winSize, 0);
+	var _owOverlapBuffers;
 
 	var _first = true;
+
+
+	this.init = function() {
+
+		var _ = this;
+
+		_omega = _.create_omega_array(winSize);
+
+		_previousInputPhase = _.create_constant_array(winSize/2, 0);
+		_previousOutputPhase = _.create_constant_array(winSize/2, 0);
+		_framingWindow = _.create_sin_beta_window_array(winSize, 1);
+		_squaredFramingWindow = _framingWindow.map(function(x,i){ return x*x; });
+
+		_overlapBuffers = _.create_constant_array(winSize, 0);
+
+		_owOverlapBuffers = _.create_constant_array(winSize, 0);
+
+		_.set_alpha(1);
+	}
+
+
+	this.get_previous_input_phase = function() {
+		return _previousInputPhase;
+	}
+
+	this.get_previous_output_phase = function() {
+		return _previousOutputPhase;
+	}
 
 
 	/*
@@ -34,7 +61,7 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *
 	 *  @returns Float32Array array with 'RS' size.
 	 */
-	function overlapAndSlide(RS, frame, overlapBuffer, windowSize) {
+	this.overlap_and_slide = function(RS, frame, overlapBuffer, windowSize) {
 		//var finishedBytes = new Float32Array(RS);
 		var finishedBytes = new Array(RS);
 
@@ -60,39 +87,6 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	}
 
 
-
-	function fftShift(data) {
-		if (data.length % 2 == 0) {
-			fftShiftEven(data);
-		} else {
-		  	fftShiftOdd(data);
-		}
-	}	
-
-
-	function fftShiftOdd(data) {
-		var shiftAmt = data.length / 2;
-		var remaining = data.length;
-		var curr = 0;
-		while (remaining >= 0) {
-			var next = data[(curr + shiftAmt) % data.length];
-			data[(curr+shiftAmt) % data.length] = save;
-			save = next;
-			curr = (curr + shiftAmt) % data.length;
-			remaining--;
-		}
-	}
-
-
-	function fftShiftEven(data) {
-		for (var i = 0; i < data.length / 2; i++) {
-	      var tmp = data[i];
-	      data[i] = data[i + data.length / 2];
-	      data[i + data.length / 2] = tmp;
-	    }
-	}
-
-
 	/*
 	 *  TODO
 	 *
@@ -102,7 +96,7 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *
 	 *  @returns Phase advances per sample for the frequency bins.
 	 */
-	function createOmegaArray(size) {
+	this.create_omega_array = function(size) {
 		return Array.apply(null, Array(size/2 + 1)).map(function (x, i) { 
 			return 2 * Math.PI * i / size;
 		});
@@ -119,14 +113,14 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *
 	 *  @returns TODO
 	 */
-	function createSinBetaWindowArray(size, beta) {
+	this.create_sin_beta_window_array = function(size, beta) {
 		return Array.apply(null, Array(size)).map(function(x,i){
 			return Math.pow(Math.sin(Math.PI*i/size), beta);
 		});
 	}
 
 
-	function createConstantArray(size, constant) {
+	this.create_constant_array = function(size, constant) {
 		return Array.apply(null, Array(size)).map(function () { 
 			return constant; 
 		});
@@ -144,7 +138,7 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 * the bins' indexes where the influence regions start, and 'inflRegionEnd', the bins' indexes 
 	 * where the influence regions end.
 	 */
-	function findPeaksV3(magFrame) {
+	this.find_peaks_v3 = function(magFrame) {
 		var magSpecPad = [0,0].concat(magFrame).concat([0,0]);
 
 		var peaks = magSpecPad.slice(2,magSpecPad.length-2).map(function(x,i){
@@ -187,22 +181,22 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *
 	 *  @returns Float32Array array with the instantaneous phase advances.
 	 */
-	function get_phase_advances_v4(currentInputPhase, previousInputPhase, omega, RA, RS) {
+	this.get_phase_advances_v4 = function(currentInputPhase, previousInputPhase, omega, RA, RS) {
 		var twoPI = 2 * Math.PI;
-		var ipa_hop = new Array(omega.length);
+		var instPhaseAdvHop = new Array(omega.length);
 
 		for (var i=0; i<omega.length; i++) {
-			var dphi = omega[i] * RA;
+			var expectedPhaseAdv = omega[i] * RA;
 
-			var auxHpi = (currentInputPhase[i] - previousInputPhase[i]) - dphi;
-			var hpi = auxHpi - twoPI * Math.round(auxHpi/twoPI);
+			var auxheterodynedPhaseIncr = (currentInputPhase[i] - previousInputPhase[i]) - expectedPhaseAdv;
+			var heterodynedPhaseIncr = auxheterodynedPhaseIncr - twoPI * Math.round(auxheterodynedPhaseIncr/twoPI);
 
-			var ipa_sample = omega[i] + hpi / RA;
+			var instPhaseAdvPerSampleHop = omega[i] + heterodynedPhaseIncr / RA;
 
-			ipa_hop[i] = ipa_sample * RS;
+			instPhaseAdvHop[i] = instPhaseAdvPerSampleHop * RS;
 		}
 
-		return ipa_hop;
+		return instPhaseAdvHop;
 	}
 
 	/*
@@ -220,7 +214,7 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *
 	 *	@returns TODO
 	 */
-	function get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, frequencyBins, influenceRegions) {
+	this.get_phasor_theta_v2 = function(currentInputPhase, previousOutputPhase, instPhaseAdv, frequencyBins, influenceRegions) {
 		// Get the peaks in the spectrum together with their regions of influence.
 
 		//var theta = new Float32Array(currentInputPhase.length);
@@ -256,17 +250,29 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *
 	 *  @returns Float32Array array with the phasor angles.
 	 */
-	function identity_phase_locking_v2(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
-		var r = findPeaks(currentInputMagnitude);
+	this.identity_phase_locking_v2 = function(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
+		var _ = this;
+
+		var r = _.find_peaks_v3(currentInputMagnitude);
 
 		var influenceRegions = new Array(r.inflRegionStart.length);
 
 		for (var i=0; i<influenceRegions.length; i++) 
 			influenceRegions[i] = Math.max(0, r.inflRegionEnd[i] - r.inflRegionStart[i] + 1);
 
-		var phasor_theta = get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, r.peaks, influenceRegions);
+		var phasor_theta = _.get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, r.peaks, influenceRegions);
 
 		return phasor_theta;
+	}
+
+	this.no_phase_locking = function(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
+		var theta = new Array(currentInputPhase.length);
+
+		for (var i=0; i<currentInputPhase.length; i++) {
+			theta[i] = previousOutputPhase[i] + instPhaseAdv[i] - currentInputPhase[i];
+		}
+
+		return theta;
 	}
 
 	/**
@@ -288,15 +294,18 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 	 *		'imag': a Float32Array vector with the imaginary part of the output frame.
 	 *		'phase': a Float32Array vector with the phase/angle of the output frame.
 	 */
-	function pv_step_v2(fftObject, previousInputPhase, previousOutputPhase, omega, RA, RS) {
+	this.pv_step_v2 = function(fftObject, previousInputPhase, previousOutputPhase, omega, RA, RS) {
 
-		var currentInputPhase = fftObject.angle;
+		var _ = this;
 
-		var instPhaseAdv = get_phase_advances_v4(currentInputPhase, previousInputPhase, omega, RA, RS);
+		var currentInputPhase = fftObject.phase;
 
-		var currentInputMag = fftObject.spectrum;
+		var instPhaseAdv = _.get_phase_advances_v4(currentInputPhase, previousInputPhase, omega, RA, RS);
 
-		var phasor_theta = identity_phase_locking_v2(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
+		var currentInputMag = fftObject.magnitude;
+
+		// var phasor_theta = _.no_phase_locking(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
+		var phasor_theta = _.identity_phase_locking_v2(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv);
 
 		var out_real = new Array((phasor_theta.length-1)*2);
 		var out_imag = new Array((phasor_theta.length-1)*2);
@@ -334,125 +343,94 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 
 	this.process = function(inputFrame) {
 
-		var fftObject = this.STFT(inputFrame, _framingWindow);
+		var _ = this;
+
+		var fftObject = (_first)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
 		//_position += _RA;
 
 		var outputFrame = [];
 
 		var processedFrame = [];
 
-		var out = (_first)? null : pv_step_v2(_fftProcessor, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
-		_previousOutputPhase = (_first)? _fftProcessor.angle : out.phase;
-		_previousInputPhase = _fftProcessor.angle;
-		processedFrame = (_first)? _fftProcessor.inverse() : _fftProcessor.inverse(out.real, out.imag);
+		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
+		_previousOutputPhase = (_first)? fftObject.phase : out.phase;
+		_previousInputPhase = fftObject.phase;
+		processedFrame = (_first)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
 		_first = false;
+		outputFrame = _.overlap_and_slide(_RS, processedFrame, _overlapBuffers, _winSize);
 
-		processedFrame = _framingWindow.process(processedFrame);
-
-		//fftShift(processedFrame);
-
-		outputFrame = overlapAndSlide(_RS, processedFrame, _overlapBuffers, _winSize);
-
-		owFrame = overlapAndSlide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
+		owFrame = _.overlap_and_slide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
 
 		outputFrame = outputFrame.map(function(sample, i){
-			return sample / ((owFrame[i]<10e-3)? 10e-3 : owFrame[i]);
+			return sample / ((owFrame[i]<10e-3)? 1 : owFrame[i]);
 		});
 
 		return outputFrame;
 
 	}
 
-	/*
-	 * TODO: I NEED TO TEST THIS.
-	 */
-	this.processAll = function(data) {
-		var Y = [];
-		var OW = [];
-		var win = _framingWindow.process(createConstantArray(winSize, 1));
-		var numFrames = Math.floor((data.length - _winSize)/_RA + 1);
+	this.process_without_overlap_and_add = function(inputFrame) {
 
-		for (var i=0, anaPos=0, synPos=0; i<numFrames; i++, anaPos+=_RA, synPos+=_RS) {
-			console.log('Frame ' + (i+1) + '/' + numFrames);
-			// Analysis Step
-			var frame = _framingWindow.process(data.subarray(anaPos,anaPos+_winSize));
-			_fftProcessor.forward(frame);
-			_fftProcessor.calculateSpectrumAndPhase();
-			// -------------
+		var _ = this;
 
-			// Phase Correction Step
-			var out = (_first)? null : pv_step_v2(_fftProcessor, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
-			_previousOutputPhase = (_first)? _fftProcessor.angle : out.phase;
-			_previousInputPhase = _fftProcessor.angle;
-			processedFrame = (_first)? _fftProcessor.inverse() : _fftProcessor.inverse(out.real, out.imag);
-			processedFrame = _framingWindow.process(processedFrame);
-			// ---------------------
+		var fftObject = (_first)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
+		//_position += _RA;
 
-			// Overlapping  Step
-			processedFrame = Array.prototype.slice.call(processedFrame);
-			if (_first) {
-				Y = Y.concat(processedFrame);
-				OW = OW.concat(win);
-			} else {
-				var overlappedFrames = new Array(processedFrame.length);
-				var overlappedWindows = new Array(processedFrame.length);
-				for (var j=0; j<processedFrame.length; j++) {
-					overlappedWindows[j] = win[j] + ((OW[synPos+j])? OW[synPos+j] : 0);
-					overlappedFrames[j] = (processedFrame[j] + ((Y[synPos+j])? Y[synPos+j] : 0)) / overlappedWindows[j];
-				}
-				Y.splice(synPos);
-				Y = Y.concat(overlappedFrames);
-				OW.splice(synPos);
-				OW = OW.concat(overlappedWindows);
-			}
-			// -----------------
+		var outputFrame = [];
 
-			_first = false;
+		var processedFrame = [];
 
-		}
+		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
+		_previousOutputPhase = (_first)? fftObject.phase : out.phase;
+		_previousInputPhase = fftObject.phase;
+		processedFrame = (_first)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
+		_first = false;
 
-		return Y;
+		return processedFrame;
 	}
 
 	this.reset = function() {
 
-		_previousInputPhase = createConstantArray(winSize/2, 0);
-		_previousOutputPhase = createConstantArray(winSize/2, 0);
+		var _ = this;
 
-		_overlapBuffers = createConstantArray(winSize, 0);
-		_owOverlapBuffers = createConstantArray(winSize, 0);
+		_previousInputPhase = _.create_constant_array(winSize/2, 0);
+		_previousOutputPhase = create_constant_array(winSize/2, 0);
+
+		_overlapBuffers = _.create_constant_array(winSize, 0);
+		_owOverlapBuffers = _.create_constant_array(winSize, 0);
 
 		_first = true;
 	}
 
-	this.setAlpha = function(newAlpha) {
-		this.reset();
-		_RA = _winSize/4;
-		_RS = Math.round(newAlpha * _RA);
+	this.reset2 = function() {
+
+		var _ = this;
+
+		_previousInputPhase = _.create_constant_array(winSize/2, 0);
+		_previousOutputPhase = _.create_constant_array(winSize/2, 0);
+
+		_first = true;
 	}
 
-	this.setPosition = function(newPosition) {
-		this.reset();
-		_position = newPosition;
-	}
+	
 
-	this.STFT = function(inputFrame, windowFrame) {
+	this.STFT = function(inputFrame, windowFrame, wantedSize) {
 		var winSize = windowFrame.length;
 		var _inputFrame = new Array(winSize);
 		var fftFrame = new Array(2*winSize);
 
 		for (var i=0; i<winSize; i++) {
-			myData1[i] = inputFrame[i] * windowFrame[i];
+			_inputFrame[i] = inputFrame[i] * windowFrame[i];
 		}
 		var fft = new FFT.complex(winSize, false);
 		fft.simple(fftFrame, _inputFrame, 'real');
 
-		var real = new Array(winSize);
-		var imag = new Array(winSize);
-		var magnitude = new Array(winSize);
-		var phase = new Array(winSize);
+		var real = new Array(Math.min(winSize,wantedSize));
+		var imag = new Array(Math.min(winSize,wantedSize));
+		var magnitude = new Array(Math.min(winSize,wantedSize));
+		var phase = new Array(Math.min(winSize,wantedSize));
 
-		for (var i=0; i<winSize; i++) {
+		for (var p=0; p<winSize && p<wantedSize; p++) {
 			real[p] = fftFrame[2*p];
 			imag[p] = fftFrame[2*p+1];
 			magnitude[p] = Math.sqrt(imag[p]*imag[p] + real[p]*real[p]);
@@ -463,28 +441,61 @@ function PhaseVocoder(winSize, sampleRate, alpha) {
 			real: real,
 			imag: imag,
 			magnitude: magnitude,
-			angle: phase
+			phase: phase
 		}
 	}
 
 	this.ISTFT = function(real, imaginary, windowFrame) {
 		var input = new Array(2 * windowFrame.length);
 		var output1 = new Array(2 * windowFrame.length);
-		var output2 = new Array(2 * windowFrame.length);
+		var output2 = new Array(windowFrame.length);
 
-		for (var i=0; i<2048; i++) {
+		for (var i=0; i<windowFrame.length; i++) {
 			input[2*i] = real[i];
 			input[2*i+1] = imaginary[i];
 		}
 
-		var ifft = new FFT.complex(2048, true);
+		var ifft = new FFT.complex(windowFrame.length, true);
 
 		ifft.simple(output1, input);
 
-		for (var i=0; i<2048; i++) {
-			output2[i] = output1[2*i] * windowFrame[i] / windowFrame.length;
+		var energy1 = 0;
+		var energy2 = 0;
+		var eps = 2.2204e-16;
+
+		for (var i=0; i<windowFrame.length; i++) {
+			energy1 += Math.abs(output1[2*i]);
+			output2[i] = output1[2*i] / windowFrame.length;
+			output2[i] *= windowFrame[i];
+			energy2 += Math.abs(output1[2*i]);
+			output2[i] *= energy1/(energy2+eps);
 		}
 
 		return output2;
+	}
+
+	this.get_analysis_hop = function() {
+		return _RA;
+	}
+
+	this.get_synthesis_hop = function() {
+		return _RS;
+	}
+
+	this.set_alpha = function(newAlpha) {
+		// _RA = _winSize/4;
+		// _RS = Math.round(newAlpha * _RA);
+		_RS = _winSize/4;
+		_RA = Math.round(_RS / newAlpha);
+	}
+
+	this.set_hops = function(RA, RS) {
+		_RA = RA;
+		_RS = RS;
+	}
+
+	this.set_position = function(newPosition) {
+		this.reset();
+		_position = newPosition;
 	}
 }
