@@ -21,19 +21,19 @@ function do_simple_time_to_stft_tests(data, sampleRate, winSize, opts) {
 function do_simple_time_to_stft_test(data, i, sampleRate, winSize, opts) {
 
 	//var frameNumber = data[i].frameNumber._ArrayData_;
-	var inputFrame = data[i].inputFrame._ArrayData_;
-	var windowedInputFrame =  data[i].windowedInputFrame._ArrayData_;
+	var inputFrame = data[i].input_time_frame._ArrayData_;
+	var windowedInputFrame =  data[i].windowed_input_time_frame._ArrayData_;
 	var STFTFrame = {};
 	if (opts.useWindowedFrame) {
-		STFTFrame.real = data[i].STFTWindowedInputFrame.real._ArrayData_;
-		STFTFrame.imag = data[i].STFTWindowedInputFrame.imag._ArrayData_;
-		STFTFrame.magnitude = data[i].STFTWindowedInputFrame.magnitude._ArrayData_;
-		STFTFrame.phase = data[i].STFTWindowedInputFrame.phase._ArrayData_;
+		STFTFrame.real = data[i].input_windowed_stft_frame.real._ArrayData_;
+		STFTFrame.imag = data[i].input_windowed_stft_frame.imag._ArrayData_;
+		STFTFrame.magnitude = data[i].input_windowed_stft_frame.magnitude._ArrayData_;
+		STFTFrame.phase = data[i].input_windowed_stft_frame.phase._ArrayData_;
 	} else {
-		STFTFrame.real = data[i].STFTInputFrame.real._ArrayData_;
-		STFTFrame.imag = data[i].STFTInputFrame.imag._ArrayData_;
-		STFTFrame.magnitude = data[i].STFTInputFrame.magnitude._ArrayData_;
-		STFTFrame.phase = data[i].STFTInputFrame.phase._ArrayData_;
+		STFTFrame.real = data[i].input_stft_frame.real._ArrayData_;
+		STFTFrame.imag = data[i].input_stft_frame.imag._ArrayData_;
+		STFTFrame.magnitude = data[i].input_stft_frame.magnitude._ArrayData_;
+		STFTFrame.phase = data[i].input_stft_frame.phase._ArrayData_;
 	}
 	
 
@@ -145,8 +145,8 @@ function process_with_jsfft_js(data, sampleRate, winSize, useWindowedFrame) {
 }
 
 function process_with_complex_js(data, sampleRate, winSize, useWindowedFrame) {
-	var myData1 = new Float32Array(winSize);
-	var myData2 = new Float32Array(2*winSize);
+	var myData1 = new Array(winSize);
+	var myData2 = new Array(2*winSize);
 	if (useWindowedFrame) {
 		var winprocessor = new WindowFunction(DSP.SINBETA, 1);
 		myData1 = winprocessor.process(data);
@@ -158,10 +158,10 @@ function process_with_complex_js(data, sampleRate, winSize, useWindowedFrame) {
 	var fft = new FFT.complex(winSize, false);
 	fft.simple(myData2, myData1, 'real');
 
-	var real = new Float32Array(winSize);
-	var imag = new Float32Array(winSize);
-	var magnitude = new Float32Array(winSize);
-	var phase = new Float32Array(winSize);
+	var real = new Array(winSize);
+	var imag = new Array(winSize);
+	var magnitude = new Array(winSize);
+	var phase = new Array(winSize);
 
 	for (var p=0; p<winSize; p++) {
 		real[p] = myData2[2*p];

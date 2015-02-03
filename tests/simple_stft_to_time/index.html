@@ -13,7 +13,7 @@
 
 			var isAsynchronous = true;
 
-			var url2 = '../../data/song2/simple_stft_to_istft.json';
+			var url2 = '../../data/song2/stft_to_time.json';
 
 			request2.open('GET', url2, isAsynchronous);
 			request2.onload = function(xmlEvent){
@@ -22,11 +22,14 @@
 			request2.send();
 
 		</script>
-
+		<script type="text/javascript" src="../../bignumber.js" ></script>
+		<script type="text/javascript" src="http://localhost/numericjs/src/numeric.js"></script>
 		<script type="text/javascript" src="http://localhost/jsfft/lib/complex_array.js" ></script>
 		<script type="text/javascript" src="http://localhost/jsfft/lib/fft.js" ></script>
 		<script type="text/javascript" src="../../dspjs/dsp.js" ></script>
 		<script type="text/javascript" src="../../fft.js" ></script>
+		<script type="text/javascript" src="../../jensnockert-fft.js/lib/complex.js"></script>
+		<script type="text/javascript" src="../../jensnockert-fft.js/lib/real.js"></script>
 		<script type="text/javascript" src="../test_helpers.js" ></script>
 		<script type="text/javascript" src="simple_stft_to_time_test_functions.js"></script>
 	</body>

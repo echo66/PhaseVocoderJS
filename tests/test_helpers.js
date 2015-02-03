@@ -4,8 +4,8 @@ function do_diff_v2(test, mine, length, frame, opt) {
 	var c = new Array(length);
 	var wrongSign = [];
 
-	var avgMine = amine.reduce(function(a, b) { return a + b })/amine.length;
-	var avgTest = atest.reduce(function(a, b) { return a + b })/atest.length;
+	// var avgMine = amine.reduce(function(a, b) { return a + b })/amine.length;
+	// var avgTest = atest.reduce(function(a, b) { return a + b })/atest.length;
 
 	var maxMine = Math.max.apply(Math, amine);
 	var minMine = Math.min.apply(Math, amine);
@@ -13,13 +13,24 @@ function do_diff_v2(test, mine, length, frame, opt) {
 	var maxTest = Math.max.apply(Math, atest);
 	var minTest = Math.min.apply(Math, atest);
 
-	var normalizedMine = amine.map(function(x,i){
-		return (x-minMine)/(maxMine-minMine);
-	});
+	var _max = Math.max(maxMine, maxTest);
+	var _min = Math.min(minMine, minTest);
 
-	var normalizedTest = mine.map(function(x,i){
-		return (x-minTest)/(maxTest-minTest);
-	});
+	var normalizedMine = new Array(amine.length);
+	for (var i=0; i<amine.length; i++) {
+		normalizedMine[i] = ((amine[i]-_min)/(_max-_min)) * 100;
+	}
+	// var normalizedMine = amine.map(function(x,i){
+	// 	return ((x-_min)/(_max-_min)) * 100;
+	// });
+
+	var normalizedTest = new Array(atest.length);
+	for (var i=0; i<atest.length; i++) {
+		normalizedTest[i] = ((atest[i]-_min)/(_max-_min)) * 100;
+	}
+	// var normalizedTest = atest.map(function(x,i){
+	// 	return ((x-_min)/(_max-_min)) * 100;
+	// });
 
 	for(var j=0; j<c.length; j++) {
 		if(Math.sign(amine[j])!=Math.sign(atest[j]) && opt.showWrongSign) {
@@ -175,3 +186,34 @@ function inverse_stft(fft_frame_real, fft_frame_imag, libraryName) {
 		return null;
 }
 
+
+function round_v1(x, PREC_LIM) {
+	return Math[x<0?'ceil':'floor'](x*PREC_LIM)/PREC_LIM;
+}
+
+function round_v2( value, precision ) { 
+    var pow = Math.pow ( 10, precision ); 
+    return ( Math.ceil ( pow * value ) + Math.ceil ( pow * value - Math.ceil ( pow * value ) ) ) / pow; 
+}
+
+
+// function createConstantArray(size, constant) {
+// 	return Array.apply(null, Array(size)).map(function () { 
+// 		return constant; 
+// 	});
+// }
+
+
+// function createSinBetaWindowArray(size, beta) {
+// 	return Array.apply(null, Array(size)).map(function(x,i){
+// 		return Math.pow(Math.sin(Math.PI*i/size), beta);
+// 	});
+// }
+
+// function createSinBetaWindowArray(size, beta) {
+// 	var output = new Float64Array(size);
+// 	for (var i=0; i<size; i++) {
+// 		output[i] = Math.pow(Math.sin(Math.PI*i/size), beta);
+// 	}
+// 	return output;
+// }
