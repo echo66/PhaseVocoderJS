@@ -10,8 +10,8 @@ var node = context.createScriptProcessor(BUFFER_SIZE, 2, 2);
 
 var alpha = 1;
 
-var phasevocoderL = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderL.setAlpha(1);
-var phasevocoderR = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderR.setAlpha(1);
+var phasevocoderL = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderL.init();
+var phasevocoderR = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderR.init();
 
 loadSample = function(url) {
     var request = new XMLHttpRequest();
@@ -21,19 +21,19 @@ loadSample = function(url) {
     request.onload = function() {
         console.log('url loaded');
         context.decodeAudioData(request.response, function(decodedData) {
-            // buffer = decodedData;
+            buffer = decodedData;
 
-            buffer = context.createBuffer(2, decodedData.length+BUFFER_SIZE*3+winLenHalf, context.sampleRate);
-            var bufL = buffer.getChannelData(0);
-            var bufR = buffer.getChannelData(1);
-            bufL.set(decodedData.getChannelData(0),winLenHalf);
-            bufR.set(decodedData.getChannelData(1),winLenHalf);
+            // buffer = context.createBuffer(2, decodedData.length+BUFFER_SIZE*3+winLenHalf, context.sampleRate);
+            // var bufL = buffer.getChannelData(0);
+            // var bufR = buffer.getChannelData(1);
+            // bufL.set(decodedData.getChannelData(0),winLenHalf);
+            // bufR.set(decodedData.getChannelData(1),winLenHalf);
 
-            buffer = context.createBuffer(2, decodedData.length+winLenHalf, context.sampleRate);
-            var bufL = buffer.getChannelData(0);
-            var bufR = buffer.getChannelData(1);
-            bufL.set(decodedData.getChannelData(0),winLenHalf);
-            bufR.set(decodedData.getChannelData(1),winLenHalf);
+            // buffer = context.createBuffer(2, decodedData.length+winLenHalf, context.sampleRate);
+            // var bufL = buffer.getChannelData(0);
+            // var bufR = buffer.getChannelData(1);
+            // bufL.set(decodedData.getChannelData(0),winLenHalf);
+            // bufR.set(decodedData.getChannelData(1),winLenHalf);
         });
     }
 
@@ -51,7 +51,7 @@ function createBuffer(arrayBuffer) {
     console.log('loaded audio in ' + (new Date() - start));
 }
 
-loadSample('../soundtouchjs/4.mp3');
+loadSample('../soundtouchjs/2.mp3');
 
 var position = 0;
 
@@ -103,7 +103,7 @@ node.onaudioprocess = function (e) {
             bufR[i] = ir[i + position];
         }
 
-        position += phasevocoderL.getAnalysisHop();
+        position += phasevocoderL.get_analysis_hop();
         // position += BUFFER_SIZE/4;
         // position += Math.round(BUFFER_SIZE/8);
 
@@ -125,8 +125,8 @@ node.onaudioprocess = function (e) {
 };
 
 function setAlpha(newAlpha) {
-    phasevocoderL.setAlpha(newAlpha);
-    phasevocoderR.setAlpha(newAlpha);
+    phasevocoderL.set_alpha(newAlpha);
+    phasevocoderR.set_alpha(newAlpha);
 }
 
 function reset() {

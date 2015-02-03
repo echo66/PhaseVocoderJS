@@ -348,18 +348,14 @@ function PhaseVocoder(winSize, sampleRate) {
 		var fftObject = (_first)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
 		//_position += _RA;
 
-		var outputFrame = [];
-
-		var processedFrame = [];
-
 		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
 		_previousOutputPhase = (_first)? fftObject.phase : out.phase;
 		_previousInputPhase = fftObject.phase;
-		processedFrame = (_first)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
+		var processedFrame = (_first)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
 		_first = false;
-		outputFrame = _.overlap_and_slide(_RS, processedFrame, _overlapBuffers, _winSize);
+		var outputFrame = _.overlap_and_slide(_RS, processedFrame, _overlapBuffers, _winSize);
 
-		owFrame = _.overlap_and_slide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
+		var owFrame = _.overlap_and_slide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
 
 		outputFrame = outputFrame.map(function(sample, i){
 			return sample / ((owFrame[i]<10e-3)? 1 : owFrame[i]);
@@ -369,24 +365,58 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	}
 
-	this.process_without_overlap_and_add = function(inputFrame) {
+	this.process_debug = function(inputFrame, params) {
 
 		var _ = this;
 
-		var fftObject = (_first)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
-		//_position += _RA;
-
-		var outputFrame = [];
-
-		var processedFrame = [];
-
-		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
-		_previousOutputPhase = (_first)? fftObject.phase : out.phase;
-		_previousInputPhase = fftObject.phase;
-		processedFrame = (_first)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
+		var oldFirst = _first;
 		_first = false;
 
-		return processedFrame;
+		var fftObject = {};
+
+		if (params.stft.do_stft) {
+			fftObject = (oldFirst)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
+		} else {
+			fftObject.real = params.stft.real;
+			fftObject.imag = params.stft.imag;
+			fftObject.magnitude = params.stft.magnitude;
+			fftObject.phase = params.stft.phase;
+		}
+
+		//_position += _RA;
+
+		var out = (oldFirst)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
+		_previousOutputPhase = (oldFirst)? fftObject.phase : out.phase;
+		_previousInputPhase = fftObject.phase;
+		
+
+		if (!params.istft.do_istft) {
+			return {
+				correctedSpectrum: (oldFirst)? fftObject : out
+			};
+		}
+
+		var processedFrame = (oldFirst)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
+
+		if (!params.overlap_and_slide.do_overlap_and_slide)
+			return {
+				istft: processedFrame,
+				correctedSpectrum: (oldFirst)? fftObject : out
+			};
+
+		var outputFrame = _.overlap_and_slide(_RS, processedFrame, _overlapBuffers, _winSize);
+
+		var owFrame = _.overlap_and_slide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
+
+		outputFrame = outputFrame.map(function(sample, i){
+			return sample / ((owFrame[i]<10e-3)? 1 : owFrame[i]);
+		});
+
+		return {
+			outputFrame: outputFrame,
+			istft: processedFrame,
+			correctedSpectrum: fftObject
+		};
 	}
 
 	this.reset = function() {
@@ -445,30 +475,44 @@ function PhaseVocoder(winSize, sampleRate) {
 		}
 	}
 
-	this.ISTFT = function(real, imaginary, windowFrame) {
-		var input = new Array(2 * windowFrame.length);
-		var output1 = new Array(2 * windowFrame.length);
-		var output2 = new Array(windowFrame.length);
+	this.ISTFT = function(real, imaginary, windowFrame, restoreEnergy) {
+		var input = new Array(2 * real.length);
+		var output1 = new Array(2 * real.length);
+		var output2 = new Array(real.length);
 
-		for (var i=0; i<windowFrame.length; i++) {
+		for (var i=0; i<real.length; i++) {
 			input[2*i] = real[i];
 			input[2*i+1] = imaginary[i];
 		}
 
-		var ifft = new FFT.complex(windowFrame.length, true);
+		// var ifft = new FFT.complex(real.length, true);
 
-		ifft.simple(output1, input);
+		// ifft.simple(output1, input);
 
-		var energy1 = 0;
-		var energy2 = 0;
-		var eps = 2.2204e-16;
+		var ifft = new FFT.complex(real.length, true);
 
-		for (var i=0; i<windowFrame.length; i++) {
-			energy1 += Math.abs(output1[2*i]);
-			output2[i] = output1[2*i] / windowFrame.length;
-			output2[i] *= windowFrame[i];
-			energy2 += Math.abs(output1[2*i]);
-			output2[i] *= energy1/(energy2+eps);
+		ifft.simple(output1, input, 'complex');
+
+		if (restoreEnergy) {
+			var energy1 = 0;
+			var energy2 = 0;
+			var eps = 2.2204e-16;
+			for (var i=0; i<windowFrame.length; i++) {
+				energy1 += Math.abs(output1[2*i]);
+				output2[i] = output1[2*i] / windowFrame.length;
+				output2[i] *= windowFrame[i];
+				energy2 += Math.abs(output1[2*i]);
+				output2[i] *= energy1/(energy2+eps);
+			}
+		} else if (windowFrame) {
+			for (var i=0; i<windowFrame.length; i++) {
+				output2[i] = output1[2*i] / windowFrame.length;
+				output2[i] *= windowFrame[i];
+			}
+		} else {
+			for (var i=0; i<real.length; i++) {
+				output2[i] = output1[2*i] / real.length;
+			}
 		}
 
 		return output2;
@@ -480,6 +524,14 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	this.get_synthesis_hop = function() {
 		return _RS;
+	}
+
+	this.get_framing_window = function() {
+		return _framingWindow;
+	}
+
+	this.get_squared_framing_window = function() {
+		return _squaredFramingWindow;
 	}
 
 	this.set_alpha = function(newAlpha) {
