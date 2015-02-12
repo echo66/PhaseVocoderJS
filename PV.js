@@ -526,6 +526,10 @@ function PhaseVocoder(winSize, sampleRate) {
 		return _RS;
 	}
 
+	this.get_alpha = function() {
+		return _RS / _RA;
+	}
+
 	this.get_framing_window = function() {
 		return _framingWindow;
 	}
@@ -535,10 +539,10 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	this.set_alpha = function(newAlpha) {
-		// _RA = _winSize/4;
-		// _RS = Math.round(newAlpha * _RA);
-		_RS = _winSize/4;
-		_RA = Math.round(_RS / newAlpha);
+		_RA = _winSize/4;
+		_RS = Math.round(newAlpha * _RA);
+		// _RS = Math.round(_winSize/2);
+		// _RA = Math.round(_RS / newAlpha);
 	}
 
 	this.set_hops = function(RA, RS) {

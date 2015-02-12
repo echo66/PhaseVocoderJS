@@ -13,6 +13,9 @@ var alpha = 1;
 var phasevocoderL = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderL.init();
 var phasevocoderR = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderR.init();
 
+// var phasevocoderL2 = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderL2.init();
+// var phasevocoderR2 = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderR2.init();
+
 loadSample = function(url) {
     var request = new XMLHttpRequest();
     request.open('GET', url, true);
@@ -51,7 +54,7 @@ function createBuffer(arrayBuffer) {
     console.log('loaded audio in ' + (new Date() - start));
 }
 
-loadSample('../soundtouchjs/2.mp3');
+loadSample('../soundtouchjs/4.mp3');
 
 var position = 0;
 
@@ -75,13 +78,16 @@ var buffers = [];
 //     position += BUFFER_SIZE*alpha;
 // }
 
+var outBufferL = [];
+var outBufferR = [];
+
 node.onaudioprocess = function (e) {
 
     // var outBufferL = new Float32Array(BUFFER_SIZE);
     // var outBufferR = new Float32Array(BUFFER_SIZE);
 
-    var outBufferL = [];
-    var outBufferR = [];
+    // var outBufferL = [];
+    // var outBufferR = [];
 
     var il = buffer.getChannelData(0);
     var ir = buffer.getChannelData(1);
@@ -97,27 +103,30 @@ node.onaudioprocess = function (e) {
         var bufR = new Float32Array(BUFFER_SIZE);
 
         for (var i = 0; i < BUFFER_SIZE; i++) {
-            // bufL = bufL.concat(il[i + position]);
-            // bufR = bufR.concat(ir[i + position]);
             bufL[i] = il[i + position];
             bufR[i] = ir[i + position];
         }
 
         position += phasevocoderL.get_analysis_hop();
-        // position += BUFFER_SIZE/4;
-        // position += Math.round(BUFFER_SIZE/8);
 
         // Process left input channel
         outBufferL = outBufferL.concat(phasevocoderL.process(bufL));
+        // phasevocoderL2.process(bufL);
 
         // Process right input channel
         outBufferR = outBufferR.concat(phasevocoderR.process(bufR));
+        // phasevocoderR2.process(bufR);
 
     } while(outBufferL.length < BUFFER_SIZE);
 
+    // var bufs = [outBufferL, outBufferR];
+
+    // var bufs = process_samples(BUFFER_SIZE, bufs, 1/phasevocoderR.get_alpha());
+    // outBufferL = bufs[0];
+    // outBufferR = bufs[1];
+
+
     for (var i = 0, LEN = outBufferL.length; i < BUFFER_SIZE; i++) {
-        // ol[i] = bufL.shift();
-        // or[i] = bufR.shift();
         ol[i] = outBufferL.shift();
         or[i] = outBufferR.shift()
     }
@@ -127,6 +136,15 @@ node.onaudioprocess = function (e) {
 function setAlpha(newAlpha) {
     phasevocoderL.set_alpha(newAlpha);
     phasevocoderR.set_alpha(newAlpha);
+    
+    // phasevocoderL2.set_alpha(newAlpha);
+    // phasevocoderR2.set_alpha(newAlpha);
+}
+
+function setPosition(v) {
+    outBufferL = [];
+    outBufferR = [];
+    position = Math.round(buffer.length * v);
 }
 
 function reset() {
@@ -142,16 +160,16 @@ function pause() {
     node.disconnect();
 }
 
-function process_samples(input_start, buffer_size, input_channels, output_start, output_channels, rate) {
+function process_samples(buffer_size, input_buffers, rate) {
     var beat, destination_offset, sample_l, sample_r, source_offset, source_offset_float;
+    var output_buffers = [new Array(buffer_size), new Array(buffer_size)];
     while (--buffer_size >= 0) {
-        source_offset_float = input_start + (buffer_size * rate);
+        source_offset_float = buffer_size * rate;
         source_offset = Math.round(source_offset_float);
-        destination_offset = output_start + buffer_size;
-        sample_l = input_channels[0][source_offset];
-        sample_r = input_channels[1][source_offset];
-        output_channels[0][destination_offset] = sample_l;
-        output_channels[1][destination_offset] = sample_r;
+        sample_l = input_buffers[0][source_offset];
+        sample_r = input_buffers[1][source_offset];
+        output_buffers[0][buffer_size] = sample_l;
+        output_buffers[1][buffer_size] = sample_r;
     }
-    return null;
+    return output_buffers;
 };
