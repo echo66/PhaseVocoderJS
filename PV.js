@@ -345,17 +345,20 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		var _ = this;
 
+		var __RS = _RS;
+		var __RA = _RA;
+
 		var fftObject = (_first)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
 		//_position += _RA;
 
-		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
+		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS);
 		_previousOutputPhase = (_first)? fftObject.phase : out.phase;
 		_previousInputPhase = fftObject.phase;
 		var processedFrame = (_first)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
 		_first = false;
-		var outputFrame = _.overlap_and_slide(_RS, processedFrame, _overlapBuffers, _winSize);
+		var outputFrame = _.overlap_and_slide(__RS, processedFrame, _overlapBuffers, _winSize);
 
-		var owFrame = _.overlap_and_slide(_RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
+		var owFrame = _.overlap_and_slide(__RS, _squaredFramingWindow, _owOverlapBuffers, _winSize);
 
 		outputFrame = outputFrame.map(function(sample, i){
 			return sample / ((owFrame[i]<10e-3)? 1 : owFrame[i]);
@@ -396,7 +399,7 @@ function PhaseVocoder(winSize, sampleRate) {
 			};
 		}
 
-		var processedFrame = (oldFirst)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow) : _.ISTFT(out.real, out.imag, _framingWindow);
+		var processedFrame = (oldFirst)? _.ISTFT(fftObject.real, fftObject.imag, _framingWindow, true) : _.ISTFT(out.real, out.imag, _framingWindow, true);
 
 		if (!params.overlap_and_slide.do_overlap_and_slide)
 			return {
@@ -424,7 +427,7 @@ function PhaseVocoder(winSize, sampleRate) {
 		var _ = this;
 
 		_previousInputPhase = _.create_constant_array(winSize/2, 0);
-		_previousOutputPhase = create_constant_array(winSize/2, 0);
+		_previousOutputPhase = _.create_constant_array(winSize/2, 0);
 
 		_overlapBuffers = _.create_constant_array(winSize, 0);
 		_owOverlapBuffers = _.create_constant_array(winSize, 0);
@@ -543,6 +546,10 @@ function PhaseVocoder(winSize, sampleRate) {
 		_RS = Math.round(newAlpha * _RA);
 		// _RS = Math.round(_winSize/2);
 		// _RA = Math.round(_RS / newAlpha);
+	}
+
+	this.get_alpha_step = function() {
+		return 1/_RA;
 	}
 
 	this.set_hops = function(RA, RS) {

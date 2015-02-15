@@ -1,7 +1,5 @@
 var BUFFER_SIZE = 2048;
 
-var winLenHalf = Math.round(BUFFER_SIZE/2);
-
 var context = new AudioContext();
 
 var buffer = context.createBuffer(2, BUFFER_SIZE, context.sampleRate);
@@ -10,11 +8,8 @@ var node = context.createScriptProcessor(BUFFER_SIZE, 2, 2);
 
 var alpha = 1;
 
-var phasevocoderL = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderL.init();
-var phasevocoderR = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderR.init();
-
-// var phasevocoderL2 = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderL2.init();
-// var phasevocoderR2 = new PhaseVocoder(BUFFER_SIZE/2, 44100); phasevocoderR2.init();
+var phasevocoderL = new PhaseVocoder(BUFFER_SIZE, 44100); phasevocoderL.init();
+var phasevocoderR = new PhaseVocoder(BUFFER_SIZE, 44100); phasevocoderR.init();
 
 loadSample = function(url) {
     var request = new XMLHttpRequest();
@@ -25,18 +20,6 @@ loadSample = function(url) {
         console.log('url loaded');
         context.decodeAudioData(request.response, function(decodedData) {
             buffer = decodedData;
-
-            // buffer = context.createBuffer(2, decodedData.length+BUFFER_SIZE*3+winLenHalf, context.sampleRate);
-            // var bufL = buffer.getChannelData(0);
-            // var bufR = buffer.getChannelData(1);
-            // bufL.set(decodedData.getChannelData(0),winLenHalf);
-            // bufR.set(decodedData.getChannelData(1),winLenHalf);
-
-            // buffer = context.createBuffer(2, decodedData.length+winLenHalf, context.sampleRate);
-            // var bufL = buffer.getChannelData(0);
-            // var bufR = buffer.getChannelData(1);
-            // bufL.set(decodedData.getChannelData(0),winLenHalf);
-            // bufR.set(decodedData.getChannelData(1),winLenHalf);
         });
     }
 
@@ -44,50 +27,29 @@ loadSample = function(url) {
     request.send();
 }
 
-function createBuffer(arrayBuffer) {
-    offset = 0;
-    startTime = 0;
-    var start = new Date();
-    // NOTE the second parameter is required, or a TypeError is thrown
-    buffer = context.createBuffer(2, arrayBuffer.byteLength, context.sampleRate);
-
-    console.log('loaded audio in ' + (new Date() - start));
-}
-
-loadSample('../soundtouchjs/4.mp3');
+// loadSample('../soundtouchjs/4.mp3');
 
 var position = 0;
-
-var buffers = [];
-
-// node.onaudioprocess = function(e) {
-//     var il = buffer.getChannelData(0);
-//     var ir = buffer.getChannelData(1);
-//     var i = new Array(2);
-//     i[0] = il;
-//     i[1] = ir;
-
-//     var ol = e.outputBuffer.getChannelData(0);
-//     var or = e.outputBuffer.getChannelData(1);
-//     var o = new Array(2);
-//     o[0] = ol;
-//     o[1] = or;
-
-//     process_samples(position, BUFFER_SIZE, i, 0, o, alpha);
-
-//     position += BUFFER_SIZE*alpha;
-// }
 
 var outBufferL = [];
 var outBufferR = [];
 
+// node.onaudioprocess = function (e) {
+//     var il = buffer.getChannelData(0);
+//     var ir = buffer.getChannelData(1);
+
+//     var ol = e.outputBuffer.getChannelData(0);
+//     var or = e.outputBuffer.getChannelData(1);
+
+//     for (var i=0; i<BUFFER_SIZE; i++) {
+//         ol[i] = il[position+i];
+//         or[i] = ir[position+i];
+//     }
+
+//     position += BUFFER_SIZE;
+// };
+
 node.onaudioprocess = function (e) {
-
-    // var outBufferL = new Float32Array(BUFFER_SIZE);
-    // var outBufferR = new Float32Array(BUFFER_SIZE);
-
-    // var outBufferL = [];
-    // var outBufferR = [];
 
     var il = buffer.getChannelData(0);
     var ir = buffer.getChannelData(1);
@@ -102,52 +64,52 @@ node.onaudioprocess = function (e) {
         var bufL = new Float32Array(BUFFER_SIZE);
         var bufR = new Float32Array(BUFFER_SIZE);
 
-        for (var i = 0; i < BUFFER_SIZE; i++) {
-            bufL[i] = il[i + position];
-            bufR[i] = ir[i + position];
-        }
+        // for (var i = 0; i < BUFFER_SIZE; i++) {
+        //     bufL[i] = il[i + position];
+        //     bufR[i] = ir[i + position];
+        // }
+        bufL = il.subarray(position,position+BUFFER_SIZE);
+        bufR = ir.subarray(position,position+BUFFER_SIZE);
 
         position += phasevocoderL.get_analysis_hop();
 
         // Process left input channel
         outBufferL = outBufferL.concat(phasevocoderL.process(bufL));
-        // phasevocoderL2.process(bufL);
 
         // Process right input channel
-        outBufferR = outBufferR.concat(phasevocoderR.process(bufR));
-        // phasevocoderR2.process(bufR);
+        // outBufferR = outBufferR.concat(phasevocoderR.process(bufR));
 
     } while(outBufferL.length < BUFFER_SIZE);
-
-    // var bufs = [outBufferL, outBufferR];
-
-    // var bufs = process_samples(BUFFER_SIZE, bufs, 1/phasevocoderR.get_alpha());
-    // outBufferL = bufs[0];
-    // outBufferR = bufs[1];
 
 
     for (var i = 0, LEN = outBufferL.length; i < BUFFER_SIZE; i++) {
         ol[i] = outBufferL.shift();
-        or[i] = outBufferR.shift()
+        // or[i] = outBufferR.shift();
     }
+
+    // ol = outBufferL.splice(0,BUFFER_SIZE);
+    // or = outBufferR.splice(0,BUFFER_SIZE);
     
 };
 
 function setAlpha(newAlpha) {
     phasevocoderL.set_alpha(newAlpha);
     phasevocoderR.set_alpha(newAlpha);
-    
-    // phasevocoderL2.set_alpha(newAlpha);
-    // phasevocoderR2.set_alpha(newAlpha);
 }
 
 function setPosition(v) {
+    resetPVs2();
     outBufferL = [];
     outBufferR = [];
     position = Math.round(buffer.length * v);
 }
 
-function reset() {
+function resetPVs() {
+    phasevocoderL.reset();
+    phasevocoderR.reset();
+}
+
+function resetPVs2() {
     phasevocoderL.reset2();
     phasevocoderR.reset2();
 }
@@ -160,16 +122,62 @@ function pause() {
     node.disconnect();
 }
 
-function process_samples(buffer_size, input_buffers, rate) {
-    var beat, destination_offset, sample_l, sample_r, source_offset, source_offset_float;
-    var output_buffers = [new Array(buffer_size), new Array(buffer_size)];
-    while (--buffer_size >= 0) {
-        source_offset_float = buffer_size * rate;
-        source_offset = Math.round(source_offset_float);
-        sample_l = input_buffers[0][source_offset];
-        sample_r = input_buffers[1][source_offset];
-        output_buffers[0][buffer_size] = sample_l;
-        output_buffers[1][buffer_size] = sample_r;
-    }
-    return output_buffers;
-};
+document.addEventListener('DOMContentLoaded', function () {
+    var toggleActive = function (e, toggle) {
+        e.stopPropagation();
+        e.preventDefault();
+        // toggle ? e.target.classList.add('wavesurfer-dragover') :
+        //     e.target.classList.remove('wavesurfer-dragover');
+    };
+
+    var handlers = {
+        // Drop event
+        drop: function (e) {
+            toggleActive(e, false);
+
+            // Load the file into wavesurfer
+            if (e.dataTransfer.files.length) {
+                pause();
+                position = 0;
+                resetPVs();
+
+                var my = this;
+                // Create file reader
+                var reader = new FileReader();
+                reader.addEventListener('progress', function (e) {
+                    console.log(e);
+                });
+                reader.addEventListener('load', function (e) {
+                    document.getElementById('filename').innerHTML = "<b>" + filename + "</b> loaded";
+                    context.decodeAudioData(e.target.result, function(decodedData) {
+                        buffer = decodedData;
+                    });
+                });
+                reader.addEventListener('error', function () {
+                    console.error('Error reading file');
+                });
+
+                var filename = e.dataTransfer.files[0].name;
+                reader.readAsArrayBuffer(e.dataTransfer.files[0].slice());
+
+            } else {
+                console.error('Not a file');
+            }
+        },
+
+        // Drag-over event
+        dragover: function (e) {
+            toggleActive(e, true);
+        },
+
+        // Drag-leave event
+        dragleave: function (e) {
+            toggleActive(e, false);
+        }
+    };
+
+    var dropTarget = document.querySelector('#drop');
+    Object.keys(handlers).forEach(function (event) {
+        dropTarget.addEventListener(event, handlers[event]);
+    });
+});
