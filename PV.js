@@ -1,6 +1,5 @@
 function PhaseVocoder(winSize, sampleRate) {
 
-	var _position = 0;
 	var _sampleRate = sampleRate;
 
 	var _RS = 0;
@@ -349,7 +348,6 @@ function PhaseVocoder(winSize, sampleRate) {
 		var __RA = _RA;
 
 		var fftObject = (_first)? _.STFT(inputFrame, _framingWindow, _winSize) : _.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1);
-		//_position += _RA;
 
 		var out = (_first)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS);
 		_previousOutputPhase = (_first)? fftObject.phase : out.phase;
@@ -385,8 +383,6 @@ function PhaseVocoder(winSize, sampleRate) {
 			fftObject.magnitude = params.stft.magnitude;
 			fftObject.phase = params.stft.phase;
 		}
-
-		//_position += _RA;
 
 		var out = (oldFirst)? null : _.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, _RA, _RS);
 		_previousOutputPhase = (oldFirst)? fftObject.phase : out.phase;
@@ -555,10 +551,5 @@ function PhaseVocoder(winSize, sampleRate) {
 	this.set_hops = function(RA, RS) {
 		_RA = RA;
 		_RS = RS;
-	}
-
-	this.set_position = function(newPosition) {
-		this.reset();
-		_position = newPosition;
 	}
 }
