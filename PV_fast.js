@@ -106,7 +106,7 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	
 	function identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh) {
-		var _ = this; var r = {};
+		var r = {};
 
 		find_peaks(currInMag, r);
 
