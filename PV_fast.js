@@ -214,9 +214,9 @@ function PhaseVocoder(winSize, sampleRate) {
 		// ----------------------------------
 		// ------OVERLAP AND SLIDE STEP------
 		// ----------------------------------
-		var outputFrame = [];
+		var outputFrame = new Float32Array(__RS);
 		overlap_and_slide(__RS, processedFrame, _overlapBuffers, _winSize, outputFrame);
-		var owFrame = [];
+		var owFrame = new Float32Array(__RS);
 		overlap_and_slide(__RS, _squaredFramingWindow, _owOverlapBuffers, _winSize, owFrame);
 
 		for (var i=0; i<outputFrame.length; i++)
@@ -298,33 +298,34 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		var _ = this;
 
-		_omega = _.create_omega_array(winSize);
+		_omega = create_omega_array(winSize);
 
-		_previousInputPhase = _.create_constant_array(winSize/2, 0);
-		_previousOutputPhase = _.create_constant_array(winSize/2, 0);
-		_framingWindow = _.create_sin_beta_window_array(winSize, 1);
+		_previousInputPhase = create_constant_array(winSize/2, 0);
+		_previousOutputPhase = create_constant_array(winSize/2, 0);
+
+		_framingWindow = create_sin_beta_window_array(winSize, 1);
+
 		_squaredFramingWindow = _framingWindow.map(function(x,i){ return x*x; });
 
-		_overlapBuffers = _.create_constant_array(winSize, 0);
-
-		_owOverlapBuffers = _.create_constant_array(winSize, 0);
+		_overlapBuffers = create_constant_array(winSize, 0);
+		_owOverlapBuffers = create_constant_array(winSize, 0);
 
 		_.set_alpha(1);
 	}
 
-	this.create_omega_array = function(size) {
+	function create_omega_array(size) {
 		return Array.apply(null, Array(size/2 + 1)).map(function (x, i) { 
 			return 2 * Math.PI * i / size;
 		});
 	}
 	
-	this.create_sin_beta_window_array = function(size, beta) {
+	function create_sin_beta_window_array(size, beta) {
 		return Array.apply(null, Array(size)).map(function(x,i){
 			return Math.pow(Math.sin(Math.PI*i/size), beta);
 		});
 	}
 
-	this.create_constant_array = function(size, constant) {
+	function create_constant_array(size, constant) {
 		return Array.apply(null, Array(size)).map(function () { 
 			return constant; 
 		});
@@ -334,11 +335,11 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		var _ = this;
 
-		_previousInputPhase = _.create_constant_array(winSize/2, 0);
-		_previousOutputPhase = _.create_constant_array(winSize/2, 0);
+		_previousInputPhase = create_constant_array(winSize/2, 0);
+		_previousOutputPhase = create_constant_array(winSize/2, 0);
 
-		_overlapBuffers = _.create_constant_array(winSize, 0);
-		_owOverlapBuffers = _.create_constant_array(winSize, 0);
+		_overlapBuffers = create_constant_array(winSize, 0);
+		_owOverlapBuffers = create_constant_array(winSize, 0);
 
 		_first = true;
 	}
@@ -347,8 +348,8 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		var _ = this;
 
-		_previousInputPhase = _.create_constant_array(winSize/2, 0);
-		_previousOutputPhase = _.create_constant_array(winSize/2, 0);
+		_previousInputPhase = create_constant_array(winSize/2, 0);
+		_previousOutputPhase = create_constant_array(winSize/2, 0);
 
 		_first = true;
 	}
