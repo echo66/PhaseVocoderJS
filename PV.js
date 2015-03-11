@@ -166,6 +166,42 @@ function PhaseVocoder(winSize, sampleRate) {
 		return {peaks: peaks, inflRegionStart: inflRegStart, inflRegionEnd: inflRegEnd};
 	}
 
+	this.find_peaks_v4 = function(magFrame) {
+		var magSpecPad = [0,0].concat(magFrame).concat([0,0]);
+		var peaks = [];
+
+		for (var i=2, I=0; i<=magSpecPad.length-2; i++, I++) {
+			x = magSpecPad[i];
+			if (x > magSpecPad[i-2] && x > magSpecPad[i-1] && x > magSpecPad[i+1] && x > magSpecPad[i+2]) {
+				peaks = peaks.concat(I);
+			}
+		}
+
+		var inflRegStart = new Array(peaks.length); 
+
+		inflRegStart[0] = 0;
+		for (var i=0; i<peaks.length-1; i++) {
+			inflRegStart[i+1] = Math.ceil((peaks[i] + peaks[i+1])/2); 
+		}
+
+		var inflRegEnd = new Array(peaks.length);
+		for (var i=1; i<inflRegStart.length; i++) {
+			inflRegEnd[i-1] = inflRegStart[i]-1;
+		}
+		inflRegEnd[inflRegEnd.length] = inflRegEnd.length-1;
+
+		// var influenceRegions = new Array(inflRegionStart.length);
+		// for (var i=0; i<influenceRegions.length; i++) 
+		// 	influenceRegions[i] = Math.max(0, inflRegionEnd[i] - inflRegionStart[i] + 1);
+
+		return {
+			peaks: peaks, 
+			inflRegionStart: inflRegStart, 
+			inflRegionEnd: inflRegEnd,
+			// influenceRegions: influenceRegions
+		};
+	}
+
 	/*
 	 *  Returns the instantaneous phase advances per synthesis hopsize.
 	 * 
@@ -252,7 +288,7 @@ function PhaseVocoder(winSize, sampleRate) {
 	this.identity_phase_locking_v2 = function(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv) {
 		var _ = this;
 
-		var r = _.find_peaks_v3(currentInputMagnitude);
+		var r = _.find_peaks_v4(currentInputMagnitude);
 
 		var influenceRegions = new Array(r.inflRegionStart.length);
 

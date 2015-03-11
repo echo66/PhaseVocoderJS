@@ -12,7 +12,7 @@ function PhaseVocoder(winSize, sampleRate) {
 
 
 	
-	this.overlap_and_slide = function(RS, frame, overlapBuffer, windowSize, finishedBytes) {
+	function overlap_and_slide(RS, frame, overlapBuffer, windowSize, finishedBytes) {
 
 		for (var i=0; i<RS; i++) {
 			finishedBytes[i] = overlapBuffer.shift();
@@ -36,7 +36,7 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 
-	this.find_peaks = function(magFrame, out) {
+	function find_peaks(magFrame, out) {
 		var magSpecPad = [0,0].concat(magFrame).concat([0,0]);
 		out.peaks = [];
 
@@ -68,14 +68,14 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	
-	this.get_phase_advances = function(currentInputPhase, previousInputPhase, omega, RA, RS, instPhaseAdvHop) {
+	function get_phase_advances(currInPh, prevInPh, omega, RA, RS, instPhaseAdvHop) {
 		var twoPI = 2 * Math.PI;
 
 		for (var i=0; i<omega.length; i++) {
 			var expectedPhaseAdv = omega[i] * RA;
 
-			var auxheterodynedPhaseIncr = (currentInputPhase[i] - previousInputPhase[i]) - expectedPhaseAdv;
-			var heterodynedPhaseIncr = auxheterodynedPhaseIncr - twoPI * Math.round(auxheterodynedPhaseIncr/twoPI);
+			var auxHeterodynedPhaseIncr = (currInPh[i] - prevInPh[i]) - expectedPhaseAdv;
+			var heterodynedPhaseIncr = auxHeterodynedPhaseIncr - twoPI * Math.round(auxHeterodynedPhaseIncr/twoPI);
 
 			var instPhaseAdvPerSampleHop = omega[i] + heterodynedPhaseIncr / RA;
 
@@ -86,73 +86,73 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	
-	this.get_phasor_theta_v2 = function(currentInputPhase, previousOutputPhase, instPhaseAdv, frequencyBins, influenceRegions, theta) {
+	function get_phasor_theta(currInPh, prevOutPh, instPhaseAdv, frequencyBins, inflRegs, theta) {
 		// Get the peaks in the spectrum together with their regions of influence.
 
 		var theta_idx = 0;
 		for (var i=0; i<frequencyBins.length; i++) {
 			var bin = frequencyBins[i];
-			for (var j=0; j<influenceRegions[i]; j++, theta_idx++) {
-				theta[theta_idx] = previousOutputPhase[bin] + instPhaseAdv[bin] - currentInputPhase[bin];
+			for (var j=0; j<inflRegs[i]; j++, theta_idx++) {
+				theta[theta_idx] = prevOutPh[bin] + instPhaseAdv[bin] - currInPh[bin];
 			}
 		}
 
-		var remaining_length = theta.length - theta_idx;
-		for (var i=0; i<remaining_length; i++, theta_idx++)
+		var remainingLength = theta.length - theta_idx;
+		for (var i=0; i<remainingLength; i++, theta_idx++)
 			theta[theta_idx] = 0;
 
 		return;
 	}
 
 	
-	this.identity_phase_locking = function(currentInputMagnitude, currentInputPhase, previousOutputPhase, instPhaseAdv, phasor_theta) {
+	function identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh) {
 		var _ = this; var r = {};
 
-		_.find_peaks(currentInputMagnitude, r);
+		find_peaks(currInMag, r);
 
-		_.get_phasor_theta_v2(currentInputPhase, previousOutputPhase, instPhaseAdv, r.peaks, r.influenceRegions, phasor_theta);
+		get_phasor_theta(currInPh, prevOutPh, instPhaseAdv, r.peaks, r.influenceRegions, phTh);
 
 		return;
 	}
 
-	this.pv_step_v2 = function(fftObject, previousInputPhase, previousOutputPhase, omega, RA, RS, out) {
 
-		var _ = this;
+	function pv_step(fftObj, prevInPh, prevOutPh, omega, RA, RS, out) {
 
-		var currentInputPhase = fftObject.phase;
+		var currInPh = fftObj.phase;
 
-		var instPhaseAdv = new Array(omega.length);
-		_.get_phase_advances(currentInputPhase, previousInputPhase, omega, RA, RS, instPhaseAdv);
+		var instPhaseAdv = new Float32Array(omega.length);
+		get_phase_advances(currInPh, prevInPh, omega, RA, RS, instPhaseAdv);
 
-		var currentInputMag = fftObject.magnitude;
+		var currInMag = fftObj.magnitude;
 
-		var phasor_theta = new Array(currentInputPhase.length);
-		_.identity_phase_locking(currentInputMag, currentInputPhase, previousOutputPhase, instPhaseAdv, phasor_theta);
+		var PhTh = new Float32Array(currInPh.length);
+		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, PhTh);
 
-		out.real = new Array((phasor_theta.length-1)*2);
-		out.imag = new Array((phasor_theta.length-1)*2);
-		out.phase = new Array((phasor_theta.length-1)*2);
-		out.magnitude = new Array((phasor_theta.length-1)*2);
-		var doubleSize = (phasor_theta.length-1)*2;
+		var dblSize = (PhTh.length-1)*2;
+		// out.real = new Float32Array(dblSize);
+		// out.imag = new Float32Array(dblSize);
+		// out.phase = new Float32Array(dblSize);
+		// out.magnitude = new Float32Array(dblSize);
 		var sqrt = Math.sqrt; var cos = Math.cos;
 		var sin = Math.sin; var atan2 = Math.atan2;
 
 		
-		for (var i=0; i<phasor_theta.length; i++) {
-			var theta = phasor_theta[i];
+		for (var i=0; i<PhTh.length; i++) {
+			var theta = PhTh[i];
 
-			var phasor_theta_real = cos(theta);
-			var phasor_theta_imag = sin(theta);
-			out.real[i] = phasor_theta_real * fftObject.real[i] - phasor_theta_imag * fftObject.imag[i];
-			out.imag[i] = phasor_theta_real * fftObject.imag[i] + phasor_theta_imag * fftObject.real[i];
+			var PhThRe = cos(theta);
+			var PhThIm = sin(theta);
+			out.real[i] = PhThRe * fftObj.real[i] - PhThIm * fftObj.imag[i];
+			out.imag[i] = PhThRe * fftObj.imag[i] + PhThIm * fftObj.real[i];
 			out.phase[i] = atan2(out.imag[i], out.real[i]);
 			out.magnitude[i] = sqrt(out.imag[i]*out.imag[i] + out.real[i]*out.real[i]);
 
 			if (i>0) {
-				out.real[doubleSize-i] = out.real[i];
-				out.imag[doubleSize-i] = -out.imag[i];
-				out.phase[doubleSize-i] = atan2(out.imag[doubleSize-i], out.real[doubleSize-i]);
-				out.magnitude[doubleSize-i] = sqrt(out.imag[doubleSize-i]*out.imag[doubleSize-i] + out.real[doubleSize-i]*out.real[doubleSize-i]);
+				var idx = dblSize - 1;
+				out.real[idx] = out.real[i];
+				out.imag[idx] = -out.imag[i];
+				out.phase[idx] = atan2(out.imag[idx], out.real[idx]);
+				out.magnitude[idx] = sqrt(out.imag[idx]*out.imag[idx] + out.real[idx]*out.real[idx]);
 			}
 
 		}
@@ -168,39 +168,56 @@ function PhaseVocoder(winSize, sampleRate) {
 		var __RS = _RS;
 		var __RA = _RA;
 
-		// -----------------------------
-		// ----------FFT STEP-----------
-		// -----------------------------
-
-		var fftObject = {};
-		var out = {};
+		// ----------------------------------
+		// ----------ANALYSIS STEP-----------
+		// ----------------------------------
+		
 		var processedFrame = [];
 
 		if (_first) {
-			_.STFT(inputFrame, _framingWindow, _winSize, fftObject);
-			_previousOutputPhase = fftObject.phase;
-			_previousInputPhase = fftObject.phase;
-			processedFrame = new Array(fftObject.real.length);
-			_.ISTFT(fftObject.real, fftObject.imag, _framingWindow, true, processedFrame);
+			var fftObj = {
+				real: new Float32Array(_winSize), 
+				imag: new Float32Array(_winSize), 
+				magnitude: new Float32Array(_winSize), 
+				phase: new Float32Array(_winSize)
+			};
+			_.STFT(inputFrame, _framingWindow, _winSize, fftObj);
+			_previousOutputPhase = fftObj.phase;
+			_previousInputPhase = fftObj.phase;
+			processedFrame = new Float32Array(fftObj.real.length);
+			_.ISTFT(fftObj.real, fftObj.imag, _framingWindow, false, processedFrame);
 		} else {
-			_.STFT(inputFrame, _framingWindow, Math.round(_winSize/2)+1, fftObject);
-			_.pv_step_v2(fftObject, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS, out);
-			_previousOutputPhase = out.phase;
-			_previousInputPhase = fftObject.phase;
-			processedFrame = new Array(out.real);
-			_.ISTFT(out.real, out.imag, _framingWindow, true, processedFrame);
+			var hlfSize = Math.round(_winSize/2)+1;
+			var fftObj = {
+				real: new Float32Array(hlfSize), 
+				imag: new Float32Array(hlfSize), 
+				magnitude: new Float32Array(hlfSize), 
+				phase: new Float32Array(hlfSize)
+			};
+			var pvOut = {
+				real: new Float32Array(_winSize), 
+				imag: new Float32Array(_winSize), 
+				magnitude: new Float32Array(_winSize), 
+				phase: new Float32Array(_winSize)
+			};
+			_.STFT(inputFrame, _framingWindow, hlfSize, fftObj);
+			pv_step(fftObj, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS, pvOut);
+			_previousOutputPhase = pvOut.phase;
+			_previousInputPhase = fftObj.phase;
+			processedFrame = new Float32Array(pvOut.real);
+			_.ISTFT(pvOut.real, pvOut.imag, _framingWindow, false, processedFrame);
 		}
 
 		_first = false;
 
 
-		// -----------------------------
-		// ------OVERLAP AND SLIDE------
-		// -----------------------------
+		// ----------------------------------
+		// ------OVERLAP AND SLIDE STEP------
+		// ----------------------------------
 		var outputFrame = [];
-		_.overlap_and_slide(__RS, processedFrame, _overlapBuffers, _winSize, outputFrame);
+		overlap_and_slide(__RS, processedFrame, _overlapBuffers, _winSize, outputFrame);
 		var owFrame = [];
-		_.overlap_and_slide(__RS, _squaredFramingWindow, _owOverlapBuffers, _winSize, owFrame);
+		overlap_and_slide(__RS, _squaredFramingWindow, _owOverlapBuffers, _winSize, owFrame);
 
 		for (var i=0; i<outputFrame.length; i++)
 			outputFrame[i] = outputFrame[i] / ((owFrame[i]<10e-3)? 1 : owFrame[i]);
@@ -210,7 +227,6 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	
-
 	this.STFT = function(inputFrame, windowFrame, wantedSize, out) {
 		var winSize = windowFrame.length;
 		var _inputFrame = new Array(winSize);
@@ -222,10 +238,10 @@ function PhaseVocoder(winSize, sampleRate) {
 		var fft = new FFT.complex(winSize, false);
 		fft.simple(fftFrame, _inputFrame, 'real');
 
-		out.real = new Array(Math.min(winSize,wantedSize));
-		out.imag = new Array(Math.min(winSize,wantedSize));
-		out.magnitude = new Array(Math.min(winSize,wantedSize));
-		out.phase = new Array(Math.min(winSize,wantedSize));
+		// out.real = new Array(Math.min(winSize,wantedSize));
+		// out.imag = new Array(Math.min(winSize,wantedSize));
+		// out.magnitude = new Array(Math.min(winSize,wantedSize));
+		// out.phase = new Array(Math.min(winSize,wantedSize));
 
 		for (var p=0; p<winSize && p<wantedSize; p++) {
 			var real = out.real; var imag = out.imag;
