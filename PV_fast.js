@@ -16,21 +16,12 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		for (var i=0; i<RS; i++) {
 			finishedBytes[i] = overlapBuffer.shift();
-			while(overlapBuffer.length > windowSize - 1 && overlapBuffer.length >= 0)
-				overlapBuffer.shift();
-			overlapBuffer.push.apply(overlapBuffer, [0.0]);
+			overlapBuffer[overlapBuffer.length] = 0;
 		}
 
-		var outBytes = [].concat(overlapBuffer);
-
-		for (var i=0; i<outBytes.length; i++) 
-			outBytes[i] = frame[i] + overlapBuffer[i];
-
-		while ((overlapBuffer.length > windowSize - outBytes.length) && overlapBuffer.length >= 0) {
-			overlapBuffer.shift();
-	    }
-
-	    overlapBuffer.push.apply(overlapBuffer, outBytes);
+		var L = overlapBuffer.length;
+		for (var i=0; i<L; i++) 
+			overlapBuffer[overlapBuffer.length-1] = frame[i] + overlapBuffer.shift();
 		
 		return;
 	}
