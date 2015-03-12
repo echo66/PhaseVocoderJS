@@ -175,24 +175,26 @@ function PhaseVocoder(winSize, sampleRate) {
 		var processedFrame = [];
 
 		if (_first) {
+			// IF I USE Float32Array for the fftObj, I get "phasey" artifacts.
 			var fftObj = {
-				real: new Float32Array(_winSize), 
-				imag: new Float32Array(_winSize), 
-				magnitude: new Float32Array(_winSize), 
-				phase: new Float32Array(_winSize)
+				real: new Array(_winSize), 
+				imag: new Array(_winSize), 
+				magnitude: new Array(_winSize), 
+				phase: new Array(_winSize)
 			};
 			_.STFT(inputFrame, _framingWindow, _winSize, fftObj);
 			_previousOutputPhase = fftObj.phase;
 			_previousInputPhase = fftObj.phase;
-			processedFrame = new Float32Array(fftObj.real.length);
+			processedFrame = new Array(fftObj.real.length);
 			_.ISTFT(fftObj.real, fftObj.imag, _framingWindow, false, processedFrame);
 		} else {
 			var hlfSize = Math.round(_winSize/2)+1;
+			// IF I USE Float32Array for the fftObj, I get "phasey" artifacts.
 			var fftObj = {
-				real: new Float32Array(hlfSize), 
-				imag: new Float32Array(hlfSize), 
-				magnitude: new Float32Array(hlfSize), 
-				phase: new Float32Array(hlfSize)
+				real: new Array(hlfSize), 
+				imag: new Array(hlfSize), 
+				magnitude: new Array(hlfSize), 
+				phase: new Array(hlfSize)
 			};
 			var pvOut = {
 				real: new Float32Array(_winSize), 
@@ -204,7 +206,7 @@ function PhaseVocoder(winSize, sampleRate) {
 			pv_step(fftObj, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS, pvOut);
 			_previousOutputPhase = pvOut.phase;
 			_previousInputPhase = fftObj.phase;
-			processedFrame = new Float32Array(pvOut.real);
+			processedFrame = new Array(pvOut.real);
 			_.ISTFT(pvOut.real, pvOut.imag, _framingWindow, false, processedFrame);
 		}
 
@@ -214,9 +216,9 @@ function PhaseVocoder(winSize, sampleRate) {
 		// ----------------------------------
 		// ------OVERLAP AND SLIDE STEP------
 		// ----------------------------------
-		var outputFrame = new Float32Array(__RS);
+		var outputFrame = new Array(__RS);
 		overlap_and_slide(__RS, processedFrame, _overlapBuffers, _winSize, outputFrame);
-		var owFrame = new Float32Array(__RS);
+		var owFrame = new Array(__RS);
 		overlap_and_slide(__RS, _squaredFramingWindow, _owOverlapBuffers, _winSize, owFrame);
 
 		for (var i=0; i<outputFrame.length; i++)
