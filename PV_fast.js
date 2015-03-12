@@ -18,10 +18,12 @@ function PhaseVocoder(winSize, sampleRate) {
 			finishedBytes[i] = overlapBuffer.shift();
 			while(overlapBuffer.length > windowSize - 1 && overlapBuffer.length >= 0)
 				overlapBuffer.shift();
-			overlapBuffer.push.apply(overlapBuffer, [0.0]);
+			overlapBuffer[overlapBuffer.length] = 0.0;
+			// overlapBuffer.push.apply(overlapBuffer, [0.0]);
 		}
 
-		var outBytes = [].concat(overlapBuffer);
+		// var outBytes = [].concat(overlapBuffer);
+		var outBytes = new Array(overlapBuffer.length);
 
 		for (var i=0; i<outBytes.length; i++) 
 			outBytes[i] = frame[i] + overlapBuffer[i];
@@ -175,7 +177,7 @@ function PhaseVocoder(winSize, sampleRate) {
 		var processedFrame = [];
 
 		if (_first) {
-			// IF I USE Float32Array for the fftObj, I get "phasey" artifacts.
+			// IF I USE Float32Array FOR THE fftObj, I GET "PHASEY" ARTIFACTS.
 			var fftObj = {
 				real: new Array(_winSize), 
 				imag: new Array(_winSize), 
