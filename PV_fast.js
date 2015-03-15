@@ -39,21 +39,16 @@ function PhaseVocoder(winSize, sampleRate) {
 		}
 
 		out.inflRegStart = new Array(out.peaks.length); 
+		out.inflRegEnd = new Array(out.peaks.length);
+		out.inflRegs = new Array(out.peaks.length);
 
 		out.inflRegStart[0] = 0;
-		for (var i=0; i<out.peaks.length-1; i++) {
-			out.inflRegStart[i+1] = Math.ceil((out.peaks[i] + out.peaks[i+1])/2); 
-		}
-
-		out.inflRegEnd = new Array(out.peaks.length);
-		for (var i=1; i<out.inflRegStart.length; i++) {
+		for (var i=1; i<out.peaks.length; i++) {
+			out.inflRegStart[i] = Math.ceil((out.peaks[i-1] + out.peaks[i])/2); 
 			out.inflRegEnd[i-1] = out.inflRegStart[i]-1;
+			out.inflRegs[i-1] = Math.max(0, out.inflRegEnd[i-1] - out.inflRegStart[i-1] + 1);
 		}
 		out.inflRegEnd[out.inflRegEnd.length] = out.inflRegEnd.length-1;
-
-		out.influenceRegions = new Array(out.inflRegStart.length);
-		for (var i=0; i<out.influenceRegions.length; i++) 
-			out.influenceRegions[i] = Math.max(0, out.inflRegEnd[i] - out.inflRegStart[i] + 1);
 
 		return;
 	}
@@ -101,7 +96,7 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		find_peaks(currInMag, r);
 
-		get_phasor_theta(currInPh, prevOutPh, instPhaseAdv, r.peaks, r.influenceRegions, phTh);
+		get_phasor_theta(currInPh, prevOutPh, instPhaseAdv, r.peaks, r.inflRegs, phTh);
 
 		return;
 	}
@@ -116,10 +111,10 @@ function PhaseVocoder(winSize, sampleRate) {
 
 		var currInMag = fftObj.magnitude;
 
-		var PhTh = new Float32Array(currInPh.length);
-		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, PhTh);
+		var phTh = new Float32Array(currInPh.length);
+		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh);
 
-		var dblSize = (PhTh.length-1)*2;
+		var dblSize = (phTh.length-1)*2;
 		// out.real = new Float32Array(dblSize);
 		// out.imag = new Float32Array(dblSize);
 		// out.phase = new Float32Array(dblSize);
@@ -128,13 +123,13 @@ function PhaseVocoder(winSize, sampleRate) {
 		var sin = Math.sin; var atan2 = Math.atan2;
 
 		
-		for (var i=0; i<PhTh.length; i++) {
-			var theta = PhTh[i];
+		for (var i=0; i<phTh.length; i++) {
+			var theta = phTh[i];
 
-			var PhThRe = cos(theta);
-			var PhThIm = sin(theta);
-			out.real[i] = PhThRe * fftObj.real[i] - PhThIm * fftObj.imag[i];
-			out.imag[i] = PhThRe * fftObj.imag[i] + PhThIm * fftObj.real[i];
+			var phThRe = cos(theta);
+			var phThIm = sin(theta);
+			out.real[i] = phThRe * fftObj.real[i] - phThIm * fftObj.imag[i];
+			out.imag[i] = phThRe * fftObj.imag[i] + phThIm * fftObj.real[i];
 			out.phase[i] = atan2(out.imag[i], out.real[i]);
 			out.magnitude[i] = sqrt(out.imag[i]*out.imag[i] + out.real[i]*out.real[i]);
 
