@@ -28,12 +28,12 @@ function PhaseVocoder(winSize, sampleRate) {
 
 
 	function find_peaks(magFrame, out) {
-		var magSpecPad = [0,0].concat(magFrame).concat([0,0]);
+		var msp = [0,0].concat(magFrame).concat([0,0]);
 		out.peaks = [];
 
-		for (var i=2, I=0; i<=magSpecPad.length-2; i++, I++) {
-			x = magSpecPad[i];
-			if (x > magSpecPad[i-2] && x > magSpecPad[i-1] && x > magSpecPad[i+1] && x > magSpecPad[i+2]) {
+		for (var i=2, I=0; i<=msp.length-2; i++, I++) {
+			x = msp[i];
+			if (x > msp[i-2] && x > msp[i-1] && x > msp[i+1] && x > msp[i+2]) {
 				out.peaks = out.peaks.concat(I);
 			}
 		}
@@ -83,10 +83,6 @@ function PhaseVocoder(winSize, sampleRate) {
 			}
 		}
 
-		var remainingLength = theta.length - theta_idx;
-		for (var i=0; i<remainingLength; i++, theta_idx++)
-			theta[theta_idx] = 0;
-
 		return;
 	}
 
@@ -115,10 +111,6 @@ function PhaseVocoder(winSize, sampleRate) {
 		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh);
 
 		var dblSize = (phTh.length-1)*2;
-		// out.real = new Float32Array(dblSize);
-		// out.imag = new Float32Array(dblSize);
-		// out.phase = new Float32Array(dblSize);
-		// out.magnitude = new Float32Array(dblSize);
 		var sqrt = Math.sqrt; var cos = Math.cos;
 		var sin = Math.sin; var atan2 = Math.atan2;
 
@@ -136,7 +128,7 @@ function PhaseVocoder(winSize, sampleRate) {
 			if (i>0) {
 				var idx = dblSize - 1;
 				out.real[idx] = out.real[i];
-				out.imag[idx] = -out.imag[i];
+				out.imag[idx] = out.imag[i];
 				out.phase[idx] = atan2(out.imag[idx], out.real[idx]);
 				out.magnitude[idx] = sqrt(out.imag[idx]*out.imag[idx] + out.real[idx]*out.real[idx]);
 			}
@@ -372,7 +364,7 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	this.set_alpha = function(newAlpha) {
-		_RA = _winSize/4;
+		_RA = Math.round(_winSize/4);
 		_RS = Math.round(newAlpha * _RA);
 		// _RS = Math.round(_winSize/2);
 		// _RA = Math.round(_RS / newAlpha);
