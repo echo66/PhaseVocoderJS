@@ -1,4 +1,4 @@
-function DFTc(arr) {
+function fft_complex(arr) {
 var
   _0 = arr[0]
 , _1 = arr[1024]

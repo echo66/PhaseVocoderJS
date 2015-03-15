@@ -1,4 +1,4 @@
-function fft_forward(arr) {
+function fft_real(arr) {
 var
   _0 = arr[0]
 , _1 = arr[1024]
