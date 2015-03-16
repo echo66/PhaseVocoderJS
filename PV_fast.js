@@ -16,18 +16,18 @@ function PhaseVocoder(winSize, sampleRate) {
 
 
 	
-	function overlap_and_slide(RS, frame, overlapBuffer, windowSize, finishedBytes) {
+	function overlap_and_slide(RS, inF, squaredWinF, oBuf, owOBuf, windowSize, outF) {
 
 		for (var i=0; i<RS; i++) {
-			finishedBytes[i] = overlapBuffer.shift();
-			overlapBuffer[overlapBuffer.length] = 0;
+			var owSample = owOBuf.shift();
+			outF[i] = oBuf.shift() / ((owSample<10e-3)? 1 : owSample);
+			oBuf[oBuf.length] = owOBuf[owOBuf.length] = 0;
 		}
 
-		var L = overlapBuffer.length;
-		for (var i=0; i<L; i++) 
-			overlapBuffer[overlapBuffer.length-1] = frame[i] + overlapBuffer.shift();
-		
-		return;
+		for (var i=0; i<windowSize; i++) {
+			oBuf[oBuf.length-1] = inF[i] + oBuf.shift();
+			owOBuf[owOBuf.length-1] = squaredWinF[i] + owOBuf.shift();
+		}
 	}
 
 
@@ -105,13 +105,12 @@ function PhaseVocoder(winSize, sampleRate) {
 	function pv_step(fftObj, prevInPh, prevOutPh, omega, RA, RS, out) {
 
 		var currInPh = fftObj.phase;
-
+		var currInMag = fftObj.magnitude;
 		var instPhaseAdv = new Float32Array(omega.length);
+		var phTh = new Float32Array(currInPh.length);
+
 		get_phase_advances(currInPh, prevInPh, omega, RA, RS, instPhaseAdv);
 
-		var currInMag = fftObj.magnitude;
-
-		var phTh = new Float32Array(currInPh.length);
 		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh);
 
 		var dblSize = (phTh.length-1)*2;
@@ -190,12 +189,8 @@ function PhaseVocoder(winSize, sampleRate) {
 		// ------OVERLAP AND SLIDE STEP------
 		// ----------------------------------
 		var outputFrame = new Array(__RS);
-		overlap_and_slide(__RS, processedFrame, _overlapBuffers, _winSize, outputFrame);
-		var owFrame = new Array(__RS);
-		overlap_and_slide(__RS, _squaredFramingWindow, _owOverlapBuffers, _winSize, owFrame);
 
-		for (var i=0; i<outputFrame.length; i++)
-			outputFrame[i] = outputFrame[i] / ((owFrame[i]<10e-3)? 1 : owFrame[i]);
+		overlap_and_slide(__RS, processedFrame, _squaredFramingWindow, _overlapBuffers, _owOverlapBuffers, _winSize, outputFrame);
 
 		return outputFrame;
 
