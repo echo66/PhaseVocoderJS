@@ -10,6 +10,10 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	var _first = true;
 
+	var _fftProcessor = new FFT.complex(winSize, false);
+
+	var _ifftProcessor = new FFT.complex(winSize, true);
+
 
 	
 	function overlap_and_slide(RS, frame, overlapBuffer, windowSize, finishedBytes) {
@@ -123,15 +127,6 @@ function PhaseVocoder(winSize, sampleRate) {
 			out.real[i] = phThRe * fftObj.real[i] - phThIm * fftObj.imag[i];
 			out.imag[i] = phThRe * fftObj.imag[i] + phThIm * fftObj.real[i];
 			out.phase[i] = atan2(out.imag[i], out.real[i]);
-			out.magnitude[i] = sqrt(out.imag[i]*out.imag[i] + out.real[i]*out.real[i]);
-
-			if (i>0) {
-				var idx = dblSize - 1;
-				out.real[idx] = out.real[i];
-				out.imag[idx] = out.imag[i];
-				out.phase[idx] = atan2(out.imag[idx], out.real[idx]);
-				out.magnitude[idx] = sqrt(out.imag[idx]*out.imag[idx] + out.real[idx]*out.real[idx]);
-			}
 
 		}
 		
@@ -215,13 +210,8 @@ function PhaseVocoder(winSize, sampleRate) {
 		for (var i=0; i<winSize; i++) {
 			_inputFrame[i] = inputFrame[i] * windowFrame[i];
 		}
-		var fft = new FFT.complex(winSize, false);
-		fft.simple(fftFrame, _inputFrame, 'real');
-
-		// out.real = new Array(Math.min(winSize,wantedSize));
-		// out.imag = new Array(Math.min(winSize,wantedSize));
-		// out.magnitude = new Array(Math.min(winSize,wantedSize));
-		// out.phase = new Array(Math.min(winSize,wantedSize));
+		
+		_fftProcessor.simple(fftFrame, _inputFrame, 'real');
 
 		for (var p=0; p<winSize && p<wantedSize; p++) {
 			var real = out.real; var imag = out.imag;
@@ -244,9 +234,7 @@ function PhaseVocoder(winSize, sampleRate) {
 			input[2*i+1] = imaginary[i];
 		}
 
-		var ifft = new FFT.complex(real.length, true);
-
-		ifft.simple(output1, input, 'complex');
+		_ifftProcessor.simple(output1, input, 'complex');
 
 		if (restoreEnergy) {
 			var energy1 = 0;
@@ -276,8 +264,6 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	this.init = function() {
 
-		var _ = this;
-
 		_omega = create_omega_array(winSize);
 
 		_previousInputPhase = create_constant_array(winSize/2, 0);
@@ -290,7 +276,7 @@ function PhaseVocoder(winSize, sampleRate) {
 		_overlapBuffers = create_constant_array(winSize, 0);
 		_owOverlapBuffers = create_constant_array(winSize, 0);
 
-		_.set_alpha(1);
+		this.set_alpha(1);
 	}
 
 	function create_omega_array(size) {
@@ -311,9 +297,7 @@ function PhaseVocoder(winSize, sampleRate) {
 		});
 	}
 
-	this.reset = function() {
-
-		var _ = this;
+	this.reset_phases_and_overlap_buffers = function() {
 
 		_previousInputPhase = create_constant_array(winSize/2, 0);
 		_previousOutputPhase = create_constant_array(winSize/2, 0);
@@ -324,9 +308,7 @@ function PhaseVocoder(winSize, sampleRate) {
 		_first = true;
 	}
 
-	this.reset2 = function() {
-
-		var _ = this;
+	this.reset_phases = function() {
 
 		_previousInputPhase = create_constant_array(winSize/2, 0);
 		_previousOutputPhase = create_constant_array(winSize/2, 0);
