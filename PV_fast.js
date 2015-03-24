@@ -14,6 +14,10 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	var _ifftProcessor = new FFT.complex(winSize, true);
 
+	var _overlapFactor = 4;
+
+	var _lastInputAlpha = 1;
+
 
 	
 	function overlap_and_slide(RS, inF, squaredWinF, oBuf, owOBuf, windowSize, outF) {
@@ -34,11 +38,13 @@ function PhaseVocoder(winSize, sampleRate) {
 	function find_peaks(magFrame, out) {
 		var msp = [0,0].concat(magFrame).concat([0,0]);
 		out.peaks = [];
+		var aux = new Float32Array(magFrame.length);
 
 		for (var i=2, I=0; i<=msp.length-2; i++, I++) {
 			x = msp[i];
 			if (x > msp[i-2] && x > msp[i-1] && x > msp[i+1] && x > msp[i+2]) {
 				out.peaks = out.peaks.concat(I);
+				aux[I] = I;
 			}
 		}
 
@@ -196,6 +202,72 @@ function PhaseVocoder(winSize, sampleRate) {
 
 	}
 
+
+	this.processv2 = function(fftObj) {
+
+		var _ = this;
+
+		var __RS = _RS;
+		var __RA = _RA;
+
+		// ----------------------------------
+		// ----------ANALYSIS STEP-----------
+		// ----------------------------------
+		
+		var processedFrame = [];
+
+		if (_first) {
+			// IF I USE Float32Array FOR THE fftObj, I GET "PHASEY" ARTIFACTS.
+			fftObj.magnitude = new Array(_winSize);
+			fftObj.phase = new Array(_winSize);
+			for (var i=0; i<_winSize; i++) {
+				var real = fftObj.real; var imag = fftObj.imag;
+				var phase = fftObj.phase; var magnitude = fftObj.magnitude;
+				magnitude[p] = Math.sqrt(imag[p]*imag[p] + real[p]*real[p]);
+				phase[p] = Math.atan2(imag[p], real[p]);
+			}
+			_previousOutputPhase = fftObj.phase;
+			_previousInputPhase = fftObj.phase;
+			processedFrame = new Array(fftObj.real.length);
+			_.ISTFT(fftObj.real, fftObj.imag, _framingWindow, false, processedFrame);
+		} else {
+			var hlfSize = Math.round(_winSize/2)+1;
+			// IF I USE Float32Array for the fftObj, I get "phasey" artifacts.
+			fftObj.magnitude = new Array(hlfSize);
+			fftObj.phase = new Array(hlfSize);
+			for (var i=0; i<hlfSize; i++) {
+				var real = fftObj.real; var imag = fftObj.imag;
+				var phase = fftObj.phase; var magnitude = fftObj.magnitude;
+				magnitude[p] = Math.sqrt(imag[p]*imag[p] + real[p]*real[p]);
+				phase[p] = Math.atan2(imag[p], real[p]);
+			}
+			var pvOut = {
+				real: new Float32Array(_winSize), 
+				imag: new Float32Array(_winSize), 
+				magnitude: new Float32Array(_winSize), 
+				phase: new Float32Array(_winSize)
+			};
+			pv_step(fftObj, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS, pvOut);
+			_previousOutputPhase = pvOut.phase;
+			_previousInputPhase = fftObj.phase;
+			processedFrame = new Array(pvOut.real);
+			_.ISTFT(pvOut.real, pvOut.imag, _framingWindow, false, processedFrame);
+		}
+
+		_first = false;
+
+
+		// ----------------------------------
+		// ------OVERLAP AND SLIDE STEP------
+		// ----------------------------------
+		var outputFrame = new Array(__RS);
+
+		overlap_and_slide(__RS, processedFrame, _squaredFramingWindow, _overlapBuffers, _owOverlapBuffers, _winSize, outputFrame);
+
+		return outputFrame;
+
+	}
+
 	
 	this.STFT = function(inputFrame, windowFrame, wantedSize, out) {
 		var winSize = windowFrame.length;
@@ -215,6 +287,26 @@ function PhaseVocoder(winSize, sampleRate) {
 			imag[p] = fftFrame[2*p+1];
 			magnitude[p] = Math.sqrt(imag[p]*imag[p] + real[p]*real[p]);
 			phase[p] = Math.atan2(imag[p], real[p]);
+		}
+
+		return;
+	}
+
+	this.STFTv2 = function(inputFrame, windowFrame, wantedSize, out) {
+		var winSize = windowFrame.length;
+		var _inputFrame = new Array(winSize);
+		var fftFrame = new Array(2*winSize);
+
+		for (var i=0; i<winSize; i++) {
+			_inputFrame[i] = inputFrame[i] * windowFrame[i];
+		}
+		
+		_fftProcessor.simple(fftFrame, _inputFrame, 'real');
+
+		for (var p=0; p<winSize && p<wantedSize; p++) {
+			var real = out.real; var imag = out.imag;
+			real[p] = fftFrame[2*p];
+			imag[p] = fftFrame[2*p+1];
 		}
 
 		return;
@@ -341,7 +433,8 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	this.set_alpha = function(newAlpha) {
-		_RA = Math.round(_winSize/4);
+		_lastInputAlpha = newAlpha;
+		_RA = Math.round(_winSize/_overlapFactor);
 		_RS = Math.round(newAlpha * _RA);
 		// _RS = Math.round(_winSize/2);
 		// _RA = Math.round(_RS / newAlpha);
@@ -354,5 +447,14 @@ function PhaseVocoder(winSize, sampleRate) {
 	this.set_hops = function(RA, RS) {
 		_RA = RA;
 		_RS = RS;
+	}
+
+	this.get_specified_alpha = function() {
+		return _lastInputAlpha;
+	}
+
+	this.set_overlap_factor = function(overlapFactor) {
+		_overlapFactor = overlapFactor;
+		this.set_alpha(_lastInputAlpha);
 	}
 }
