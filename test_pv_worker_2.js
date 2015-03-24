@@ -6,7 +6,9 @@ var buffer = context.createBuffer(2, BUFFER_SIZE, context.sampleRate);
 
 var node = context.createScriptProcessor(BUFFER_SIZE, 2, 2);
 
-var myWorker = new Worker('meu_w.js');
+var myWorker = new Worker('pv_worker_2.js');
+
+var alpha = 1;
 
 myWorker.onmessage = function(e) {
     bufL = bufL.concat(e.data.left);
@@ -44,26 +46,31 @@ node.onaudioprocess = function (e) {
 
     // console.log("MAIN THREAD PROCESSING");
 
+    if (bufL.length<BUFFER_SIZE) {
+        // pause();
+        myWorker.postMessage({
+            type: "process", 
+            alpha: alpha
+        });
+        return;
+    }
+
     var ol = e.outputBuffer.getChannelData(0);
     var or = e.outputBuffer.getChannelData(1);
 
     ol.set(bufL.splice(0, BUFFER_SIZE));
     or.set(bufR.splice(0, BUFFER_SIZE));
-
-    if (bufL.length<BUFFER_SIZE)
-        pause();
     
 };
 
 function play() {
-    myWorker.postMessage({type:"play"});
+    node.connect(context.destination);
 }
 
 function pause() {
-    // myWorker.postMessage({type:"pause"});
     node.disconnect();
 }
 
 function setAlpha(newAlpha) {
-    myWorker.postMessage({type: "set-alpha", alpha: newAlpha});
+    alpha = newAlpha;
 }
