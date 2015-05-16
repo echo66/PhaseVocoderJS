@@ -24,6 +24,8 @@ function PhaseVocoder(winSize, sampleRate) {
 	var dromFFT = fourier.custom["fft_f32_"+_winSize+"_asm"](stdlib, null, dromHeap);
 	dromFFT.init();
 
+	var sqrt = Math.sqrt; var cos = Math.cos;
+	var sin = Math.sin; var atan2 = Math.atan2;
 
 
 	//--------------------------------------------------
@@ -114,34 +116,31 @@ function PhaseVocoder(winSize, sampleRate) {
 	function identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh) {
 
 		var peaksLength = 0;
-
-		var msp = _find_peaks.msp;
-		msp.set(currInMag, 2);
-		for (var i=2, I=0; i<=msp.length-2; i++, I++) {
-			x = msp[i];
-			if (x > msp[i-2] && x > msp[i-1] && x > msp[i+1] && x > msp[i+2]) {
-				_find_peaks.peaks[peaksLength++] = I;
-				_find_peaks.aux[I] = I;
-			}
-		}
-
-
 		_find_peaks.inflRegStart[0] = 0;
-		for (var i=1; i<peaksLength; i++) {
-			_find_peaks.inflRegStart[i] = Math.ceil((_find_peaks.peaks[i-1] + _find_peaks.peaks[i])/2); 
-			_find_peaks.inflRegEnd[i-1] = _find_peaks.inflRegStart[i]-1;
-			_find_peaks.inflRegs[i-1] = Math.max(0, _find_peaks.inflRegEnd[i-1] - _find_peaks.inflRegStart[i-1] + 1);
+		var phTh_idx = 0;
+
+		var msp = currInMag;
+		// msp.set(currInMag, 2);
+		if (msp[0] > msp[1] && msp[i] > msp[2]) {
+			_find_peaks.peaks[peaksLength++] = 0;
 		}
 
+		for (var i=1; i<msp.length; i++) {
+			if (msp[i] > (msp[i-2]|0) && msp[i] > (msp[i-1]|0) && msp[i] > (msp[i+1]|0) && msp[i] > (msp[i+2]|0)) {
+				var j = peaksLength++;
+				var _j = j-1;
+				_find_peaks.peaks[j] = i;
+				_find_peaks.inflRegStart[j] = Math.ceil((_find_peaks.peaks[_j] + _find_peaks.peaks[j])/2); 
+				_find_peaks.inflRegEnd[_j] = _find_peaks.inflRegStart[j]-1;
+				_find_peaks.inflRegs[_j] = Math.max(0, _find_peaks.inflRegEnd[_j] - _find_peaks.inflRegStart[_j] + 1);
 
-		var phTh_idx = 0;
-		for (var i=0; i<peaksLength; i++) {
-			var bin = _find_peaks.peaks[i];
-			for (var j=0; j<_find_peaks.inflRegs[i]; j++, phTh_idx++) {
-				phTh[phTh_idx] = prevOutPh[bin] + instPhaseAdv[bin] - currInPh[bin];
+				var bin = _find_peaks.peaks[_j];
+				for (var d=0; d<_find_peaks.inflRegs[_j]; d++, phTh_idx++) {
+					phTh[phTh_idx] = prevOutPh[bin] + instPhaseAdv[bin] - currInPh[bin];
+				}
+
 			}
 		}
-
 
 		return;
 	}
@@ -157,42 +156,16 @@ function PhaseVocoder(winSize, sampleRate) {
 		get_phase_advances(currInPh, prevInPh, omega, RA, RS, instPhaseAdv);
 
 		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh);
-
-		var dblSize = (phTh.length-1)*2;
-		var sqrt = Math.sqrt; var cos = Math.cos;
-		var sin = Math.sin; var atan2 = Math.atan2;
-
-		var theta = phTh[1];
-		var phThRe = cos(theta);
-		var phThIm = sin(theta);
-		out.real[1] = phThRe * fftObj.real[1] - phThIm * fftObj.imag[1];
-		out.imag[1] = phThRe * fftObj.imag[1] + phThIm * fftObj.real[1];
-		out.phase[1] = atan2(out.imag[1], out.real[1]);
-
-		var aux = phTh.length-1;
-		var theta = phTh[aux];
-		var phThRe = cos(theta);
-		var phThIm = sin(theta);
-		out.real[aux] = phThRe * fftObj.real[aux] - phThIm * fftObj.imag[aux];
-		out.imag[aux] = phThRe * fftObj.imag[aux] + phThIm * fftObj.real[aux];
-		out.phase[aux] = atan2(out.imag[aux], out.real[aux]);
-
 		
-		for (var i=1; i<phTh.length-1; i++) {
+		for (var i=0; i<phTh.length; i++) {
 			var theta = phTh[i];
 
-			var phThRe = cos(theta);
-			var phThIm = sin(theta);
+			var phThRe = cos(phTh[i]);
+			var phThIm = sin(phTh[i]);
 			
 			out.real[i] = phThRe * fftObj.real[i] - phThIm * fftObj.imag[i];
 			out.imag[i] = phThRe * fftObj.imag[i] + phThIm * fftObj.real[i];
 			out.phase[i] = atan2(out.imag[i], out.real[i]);
-
-			// var aux = dblSize-i;
-			// out.real[aux] = out.real[i];
-			// out.imag[aux] = -out.imag[i];
-			// out.phase[aux] = atan2(out.imag[aux], out.real[aux]);
-
 		}
 		
 		return;
@@ -274,7 +247,7 @@ function PhaseVocoder(winSize, sampleRate) {
 		for (var p=0; p<winSize && p<wantedSize; p++) {
 			var R = out.real; var I = out.imag;
 			var P = out.phase; var M = out.magnitude;
-			M[p] = Math.sqrt(I[p]*I[p] + R[p]*R[p]);
+			M[p] = Math.sqrt(I[p]*I[p] + R[p]*R[p]) * 1000;
 			P[p] = Math.atan2(I[p], R[p]);
 		}
 
