@@ -35,16 +35,6 @@ function PhaseVocoder(winSize, sampleRate) {
 	//find_peaks
 	var _hlfSize = Math.round(_winSize/2)+1;
 
-	var _find_peaks = {
-		msp : create_constant_array(_hlfSize+4, 0, Float32Array), 
-		aux : create_constant_array(_hlfSize, 0, Uint8Array), 
-		peaks : create_constant_array(_hlfSize, 0.1, Float32Array), 
-		inflRegStart : create_constant_array(_hlfSize, 1, Uint8Array), 
-		inflRegEnd : create_constant_array(_hlfSize, 1, Uint8Array), 
-		inflRegs : create_constant_array(_hlfSize, 1, Uint8Array)
-	};
-	
-
 	// // process
 	var _process = {
 		fftObj : {
@@ -75,7 +65,9 @@ function PhaseVocoder(winSize, sampleRate) {
 	//--------------------------------------------------
 	//--------------------------------------------------
 
-
+	var phTh_idx = 0;
+	var twoPI = 2 * Math.PI;
+	var expectedPhaseAdv, auxHeterodynedPhaseIncr, heterodynedPhaseIncr, instPhaseAdvPerSampleHop, instPhaseAdv_, prevInstPhaseAdv_;
 	
 	function overlap_and_slide(RS, inF, squaredWinF, oBuf, owOBuf, windowSize, outF) {
 
@@ -95,50 +87,32 @@ function PhaseVocoder(winSize, sampleRate) {
 	}
 
 	
-	function get_phase_advances(currInPh, prevInPh, omega, RA, RS, instPhaseAdvHop) {
-		var twoPI = 2 * Math.PI;
+	function identity_phase_locking(mag, currInPh, prevInPh, prevOutPh, omega, RA, RS, instPhaseAdv, phTh) {
+		var peak, prevPeak, reg, regStart, prevRegEnd, prevRegStart, d, i;
+		phTh_idx = 0;
 
-		for (var i = 0; i < omega.length; i++) {
-			var expectedPhaseAdv = omega[i] * RA;
+		for (i = 0; i < omega.length; i++) {
+			expectedPhaseAdv = omega[i] * RA;
 
-			var auxHeterodynedPhaseIncr = (currInPh[i] - prevInPh[i]) - expectedPhaseAdv;
-			var heterodynedPhaseIncr = auxHeterodynedPhaseIncr - twoPI * Math.round(auxHeterodynedPhaseIncr/twoPI);
+			auxHeterodynedPhaseIncr = (currInPh[i] - prevInPh[i]) - expectedPhaseAdv;
+			heterodynedPhaseIncr = auxHeterodynedPhaseIncr - twoPI * Math.round(auxHeterodynedPhaseIncr/twoPI);
 
-			var instPhaseAdvPerSampleHop = omega[i] + heterodynedPhaseIncr / RA;
+			instPhaseAdvPerSampleHop = omega[i] + heterodynedPhaseIncr / RA;
 
-			instPhaseAdvHop[i] = instPhaseAdvPerSampleHop * RS;
-		}
+			instPhaseAdv_ = instPhaseAdvPerSampleHop * RS;
 
-		return;
-	}
-
-	
-	function identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh) {
-
-		var peaksLength = 0;
-		_find_peaks.inflRegStart[0] = 0;
-		var phTh_idx = 0;
-
-		var msp = currInMag;
-		// msp.set(currInMag, 2);
-		if (msp[0] > msp[1] && msp[i] > msp[2]) {
-			_find_peaks.peaks[peaksLength++] = 0;
-		}
-
-		for (var i=1; i<msp.length; i++) {
-			if (msp[i] > (msp[i-2]|0) && msp[i] > (msp[i-1]|0) && msp[i] > (msp[i+1]|0) && msp[i] > (msp[i+2]|0)) {
-				var j = peaksLength++;
-				var _j = j-1;
-				_find_peaks.peaks[j] = i;
-				_find_peaks.inflRegStart[j] = Math.ceil((_find_peaks.peaks[_j] + _find_peaks.peaks[j])/2); 
-				_find_peaks.inflRegEnd[_j] = _find_peaks.inflRegStart[j]-1;
-				_find_peaks.inflRegs[_j] = Math.max(0, _find_peaks.inflRegEnd[_j] - _find_peaks.inflRegStart[_j] + 1);
-
-				var bin = _find_peaks.peaks[_j];
-				for (var d=0; d<_find_peaks.inflRegs[_j]; d++, phTh_idx++) {
-					phTh[phTh_idx] = prevOutPh[bin] + instPhaseAdv[bin] - currInPh[bin];
+			if (mag[i] > Math.max((mag[i-2]|0), (mag[i-1]|0), (mag[i+1]|0), (mag[i+2]|0))) {
+			// if (mag[i] > (mag[i-2]|0) && mag[i] > (mag[i-1]|0) && mag[i] > (mag[i+1]|0) && mag[i] > (mag[i+2]|0)) {
+				peak = i;
+				regStart = Math.ceil((prevPeak + peak)/2) | 0; 
+				prevRegEnd = regStart-1;
+				reg = Math.max(0, prevRegEnd - prevRegStart + 1);
+				prevRegStart = regStart;
+				for (d = 0; d < reg; d++, phTh_idx++) {
+					phTh[phTh_idx] = prevOutPh[prevPeak] + prevInstPhaseAdv_ - currInPh[prevPeak];
 				}
-
+				prevPeak = peak;
+				prevInstPhaseAdv_ = instPhaseAdv_;
 			}
 		}
 
@@ -149,13 +123,37 @@ function PhaseVocoder(winSize, sampleRate) {
 	function pv_step(fftObj, prevInPh, prevOutPh, omega, RA, RS, out) {
 
 		var currInPh = fftObj.phase;
-		var currInMag = fftObj.magnitude;
+		var mag = fftObj.magnitude;
 		var instPhaseAdv = _pv_step.instPhaseAdv;
 		var phTh = _pv_step.phTh;
 
-		get_phase_advances(currInPh, prevInPh, omega, RA, RS, instPhaseAdv);
+		var peak, prevPeak, reg, regStart, prevRegEnd, prevRegStart, d, i;
+		phTh_idx = 0;
 
-		identity_phase_locking(currInMag, currInPh, prevOutPh, instPhaseAdv, phTh);
+		for (i = 0; i < omega.length; i++) {
+			expectedPhaseAdv = omega[i] * RA;
+
+			auxHeterodynedPhaseIncr = (currInPh[i] - prevInPh[i]) - expectedPhaseAdv;
+			heterodynedPhaseIncr = auxHeterodynedPhaseIncr - twoPI * Math.round(auxHeterodynedPhaseIncr/twoPI);
+
+			instPhaseAdvPerSampleHop = omega[i] + heterodynedPhaseIncr / RA;
+
+			instPhaseAdv_ = instPhaseAdvPerSampleHop * RS;
+
+			if (mag[i] > Math.max((mag[i-2]|0), (mag[i-1]|0), (mag[i+1]|0), (mag[i+2]|0))) {
+			// if (mag[i] > (mag[i-2]|0) && mag[i] > (mag[i-1]|0) && mag[i] > (mag[i+1]|0) && mag[i] > (mag[i+2]|0)) {
+				peak = i;
+				regStart = Math.ceil((prevPeak + peak)/2) | 0; 
+				prevRegEnd = regStart-1;
+				reg = Math.max(0, prevRegEnd - prevRegStart + 1);
+				prevRegStart = regStart;
+				for (d = 0; d < reg; d++, phTh_idx++) {
+					phTh[phTh_idx] = prevOutPh[prevPeak] + prevInstPhaseAdv_ - currInPh[prevPeak];
+				}
+				prevPeak = peak;
+				prevInstPhaseAdv_ = instPhaseAdv_;
+			}
+		}
 		
 		for (var i=0; i<phTh.length; i++) {
 			var theta = phTh[i];
@@ -184,33 +182,17 @@ function PhaseVocoder(winSize, sampleRate) {
 		// ----------------------------------
 		
 		var processedFrame = _process.processedFrame;;
-
-		if (_first) {
-			var fftObj = {
-				real: new Float32Array(_winSize), 
-				imag: new Float32Array(_winSize), 
-				magnitude: new Float32Array(_winSize), 
-				phase: new Float32Array(_winSize)
-			};
-			_.STFT(inputFrame, _framingWindow, _winSize, fftObj);
-			_previousOutputPhase = fftObj.phase;
-			_previousInputPhase = fftObj.phase;
-			_.ISTFT(fftObj.real, fftObj.imag, _framingWindow, false, processedFrame);
-		} else {
-			var fftObj = _process.fftObj;
-			// FOR SOME REASON, IF I DON'T CREATE A NEW "phase" ARRAY, I GET ARTIFACTS.
-			// fftObj.phase = new Float32Array(_hlfSize); 
-			var pvOut = _process.pvOut;
-			_.STFT(inputFrame, _framingWindow, _hlfSize, fftObj);
-			pv_step(fftObj, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS, pvOut);
-			_previousOutputPhase = pvOut.phase;
-			// The "phase" issue mentioned above is related to this line. 
-			// If I create a new Float array using the phase array, I get no issues.
-			_previousInputPhase = new Float32Array(fftObj.phase); 
-			_.ISTFT(pvOut.real, pvOut.imag, _framingWindow, false, processedFrame);
-		}
-
-		_first = false;
+		var fftObj = _process.fftObj;
+		// FOR SOME REASON, IF I DON'T CREATE A NEW "phase" ARRAY, I GET ARTIFACTS.
+		// fftObj.phase = new Float32Array(_hlfSize); 
+		var pvOut = _process.pvOut;
+		_.STFT(inputFrame, _framingWindow, _hlfSize, fftObj);
+		pv_step(fftObj, _previousInputPhase, _previousOutputPhase, _omega, __RA, __RS, pvOut);
+		_previousOutputPhase = pvOut.phase;
+		// The "phase" issue mentioned above is related to this line. 
+		// If I create a new Float array using the phase array, I get no issues.
+		_previousInputPhase = new Float32Array(fftObj.phase); 
+		_.ISTFT(pvOut.real, pvOut.imag, _framingWindow, false, processedFrame);
 
 
 		// ----------------------------------
